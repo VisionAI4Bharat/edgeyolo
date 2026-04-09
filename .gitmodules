@@ -1,0 +1,3 @@
+[submodule "third_party/edgeyolo"]
+	path = third_party/edgeyolo
+	url = https://github.com/LSH9832/edgeyolo.git

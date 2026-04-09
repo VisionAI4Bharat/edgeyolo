@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+*.swp
+.venv/
+venv/
+workspace/extracted/
+workspace/prepared/
+workspace/runs/
+workspace/exports/
+third_party/edgeyolo/output/
+third_party/edgeyolo/weights/
