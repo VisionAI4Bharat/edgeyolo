@@ -83,22 +83,36 @@ except Exception as exc:  # pragma: no cover
 # Accepted source image formats. All will be converted into final JPG images.
 IMG_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
-# Default official EdgeYOLO Tiny COCO checkpoint.
-DEFAULT_TINY_WEIGHTS_URL = (
+# Official upstream tiny COCO checkpoint URL.
+#
+# Upstream EdgeYOLO currently publishes a single Tiny COCO checkpoint filename
+# (`edgeyolo_tiny_coco.pth`) while reporting both 416 and 640 Tiny metrics in
+# the README. To make the wrapper explicit and less ambiguous in local usage,
+# this wrapper stores two local aliases:
+#   - edgeyolo_tiny_416_coco.pth
+#   - edgeyolo_tiny_640_coco.pth
+# Both aliases currently download from the same upstream URL unless upstream
+# later publishes resolution-specific weight files.
+UPSTREAM_TINY_COCO_URL = (
     "https://github.com/LSH9832/edgeyolo/releases/download/v0.0.0/edgeyolo_tiny_coco.pth"
 )
 
-# Model presets. The wrapper copies the chosen model YAML from the submodule and
-# rewrites the class count to match the prepared dataset.
 MODEL_PRESETS = {
     "tiny": {
         "base_yaml": "params/model/edgeyolo_tiny.yaml",
-        "weights_url": DEFAULT_TINY_WEIGHTS_URL,
-        "weights_name": "edgeyolo_tiny_coco.pth",
+        "weights_aliases": {
+            416: {
+                "url": UPSTREAM_TINY_COCO_URL,
+                "name": "edgeyolo_tiny_416_coco.pth",
+            },
+            640: {
+                "url": UPSTREAM_TINY_COCO_URL,
+                "name": "edgeyolo_tiny_640_coco.pth",
+            },
+        },
     },
     # Add more presets later if you decide to use edgeyolo_s, etc.
 }
-
 
 # -----------------------------------------------------------------------------
 # Logging and basic helpers
@@ -482,7 +496,8 @@ def load_yolo_label_lines(label_path: Path) -> List[Tuple[int, float, float, flo
         if any(v < 0 or v > 1 for v in vals):
             abort(f"YOLO bbox values must be normalized to [0,1] in {label_path} line {i}: {line}")
         if bw <= 0 or bh <= 0:
-            abort(f"YOLO bbox width/height must be > 0 in {label_path} line {i}: {line}")
+            log(f"[warn] Skipping zero-area YOLO box in {label_path} line {i}: {line}")
+            continue
         rows.append((cls, xc, yc, bw, bh))
     return rows
 
@@ -1012,21 +1027,117 @@ def patch_edgeyolo_for_torch26(edgeyolo_root: Path) -> None:
         log("[patch] EdgeYOLO torch.load compatibility patch already present")
 
 
-def ensure_pretrained_weights(edgeyolo_root: Path, model_key: str) -> Path:
+
+def ensure_pretrained_weights(edgeyolo_root: Path, model_key: str, input_size: int) -> Path:
+    """
+    Ensure pretrained weights exist locally.
+
+    Behavior:
+    - Keep explicit local aliases for 416 / 640 where defined.
+    - If the requested alias is missing but another alias for the same upstream
+      URL already exists, copy the existing alias instead of downloading again.
+    - If download is required, use retry + temporary-part file + atomic rename
+      to avoid leaving truncated checkpoints behind.
+    """
+    import time
+    import shutil
+
     preset = MODEL_PRESETS[model_key]
     weights_dir = edgeyolo_root / "weights"
     ensure_dir(weights_dir)
+
+    aliases = preset.get("weights_aliases")
+    if aliases:
+        # Pick the most suitable alias for the requested input size.
+        if input_size in aliases:
+            chosen_res = input_size
+        else:
+            ordered = sorted(aliases.keys())
+            chosen_res = ordered[0] if input_size <= ordered[0] else ordered[-1]
+
+        chosen = aliases[chosen_res]
+        chosen_path = weights_dir / chosen["name"]
+        chosen_url = chosen["url"]
+
+        # Already present and non-empty.
+        if chosen_path.exists() and chosen_path.stat().st_size > 0:
+            log(f"[weights] Using existing pretrained weights alias: {chosen_path}")
+            return chosen_path
+
+        # Reuse a sibling alias if it is already present and comes from the same upstream URL.
+        for _, meta in aliases.items():
+            sibling_path = weights_dir / meta["name"]
+            if sibling_path == chosen_path:
+                continue
+            if sibling_path.exists() and sibling_path.stat().st_size > 0 and meta["url"] == chosen_url:
+                shutil.copy2(sibling_path, chosen_path)
+                log(f"[weights] Reused sibling alias by copy: {sibling_path} -> {chosen_path}")
+                return chosen_path
+
+        # Download only the requested alias.
+        tmp_path = chosen_path.with_suffix(chosen_path.suffix + ".part")
+        if tmp_path.exists():
+            tmp_path.unlink()
+
+        last_err = None
+        for attempt in range(1, 4):
+            try:
+                log(
+                    f"[weights] Downloading pretrained weights alias {chosen['name']} "
+                    f"from {chosen_url} (attempt {attempt}/3)"
+                )
+                urllib.request.urlretrieve(chosen_url, tmp_path)
+                if not tmp_path.exists() or tmp_path.stat().st_size == 0:
+                    raise RuntimeError("Downloaded file is missing or empty")
+                tmp_path.replace(chosen_path)
+                log(f"[weights] Download complete: {chosen_path}")
+                return chosen_path
+            except Exception as exc:
+                last_err = exc
+                log(f"[weights] Download failed for {chosen['name']}: {exc}")
+                if tmp_path.exists():
+                    tmp_path.unlink()
+                time.sleep(2 * attempt)
+
+        abort(f"Failed to obtain pretrained weights after retries: {chosen['name']} ({last_err})")
+
+    # Generic fallback for future non-tiny presets.
     weights_path = weights_dir / preset["weights_name"]
-    if not weights_path.exists():
-        log(f"[weights] Downloading pretrained weights: {preset['weights_url']}")
-        urllib.request.urlretrieve(preset["weights_url"], weights_path)
-    else:
+    if weights_path.exists() and weights_path.stat().st_size > 0:
         log(f"[weights] Using existing pretrained weights: {weights_path}")
-    return weights_path
+        return weights_path
+
+    tmp_path = weights_path.with_suffix(weights_path.suffix + ".part")
+    if tmp_path.exists():
+        tmp_path.unlink()
+
+    last_err = None
+    for attempt in range(1, 4):
+        try:
+            log(f"[weights] Downloading pretrained weights: {preset['weights_url']} (attempt {attempt}/3)")
+            urllib.request.urlretrieve(preset["weights_url"], tmp_path)
+            if not tmp_path.exists() or tmp_path.stat().st_size == 0:
+                raise RuntimeError("Downloaded file is missing or empty")
+            tmp_path.replace(weights_path)
+            log(f"[weights] Download complete: {weights_path}")
+            return weights_path
+        except Exception as exc:
+            last_err = exc
+            log(f"[weights] Download failed: {exc}")
+            if tmp_path.exists():
+                tmp_path.unlink()
+            time.sleep(2 * attempt)
+
+    abort(f"Failed to obtain pretrained weights after retries: {weights_path.name} ({last_err})")
 
 
 def make_run_name(epochs: int, batch_size: int, input_size: int, now: dt.datetime) -> str:
     return f"e{epochs}_b{batch_size}_i{input_size}x{input_size}_{now.strftime('%Y%m%d_%H%M%S')}"
+
+
+def make_config_key(epochs: int, batch_size: int, input_size: int) -> str:
+    """Stable configuration key with no timestamp."""
+    return f"e{epochs}_b{batch_size}_i{input_size}x{input_size}"
 
 
 def write_yaml(path: Path, payload: Dict) -> None:
@@ -1034,12 +1145,34 @@ def write_yaml(path: Path, payload: Dict) -> None:
     path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
 
 
+def write_yaml_if_missing(path: Path, payload: Dict, label: str) -> None:
+    """
+    Create a YAML only if it does not already exist.
+
+    This matches the requested workflow:
+    - generated YAMLs are stable
+    - they are not recreated every run
+    - they can be edited manually and reused as-is
+    """
+    ensure_dir(path.parent)
+    if path.exists():
+        log(f"[configs] Reusing existing {label}: {path}")
+        return
+    path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    log(f"[configs] Created {label}: {path}")
+
+
 def rewrite_model_nc(base_model_yaml: Path, dst_model_yaml: Path, num_classes: int) -> None:
     """
     Copy a model YAML and rewrite the 'nc:' line.
-    We keep this simple and explicit rather than trying to parse the full file as YAML,
-    because the original model file formatting/comments may be useful to preserve.
+
+    The file is created only if missing. If it already exists, it is left
+    untouched on purpose so the user can edit it manually.
     """
+    if dst_model_yaml.exists():
+        log(f"[configs] Reusing existing model yaml: {dst_model_yaml}")
+        return
+
     text = base_model_yaml.read_text(encoding="utf-8")
     if "\nnc:" not in f"\n{text}":
         abort(f"Could not find 'nc:' in model YAML: {base_model_yaml}")
@@ -1056,14 +1189,27 @@ def rewrite_model_nc(base_model_yaml: Path, dst_model_yaml: Path, num_classes: i
 
     ensure_dir(dst_model_yaml.parent)
     dst_model_yaml.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    log(f"[configs] Created model yaml: {dst_model_yaml}")
+
+
+def load_yaml_or_abort(path: Path, label: str) -> Dict:
+    if not path.exists():
+        abort(f"Expected {label} YAML not found: {path}")
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        abort(f"{label} YAML did not parse into a dictionary: {path}")
+    return data
 
 
 @dataclass
 class GeneratedRunFiles:
     run_name: str
+    config_key: str
     run_dir: str
+    generated_root: str
     dataset_yaml: str
     train_yaml: str
+    runtime_train_yaml: str
     model_yaml: str
     weights_path: str
     prepared_dataset: str
@@ -1085,21 +1231,32 @@ def generate_edgeyolo_configs(
 ) -> GeneratedRunFiles:
     """
     Generate wrapper-owned YAMLs and run directories.
-    All generated config files live under generated/ rather than inside the submodule.
+
+    Design:
+    - run/output directories remain timestamped per actual training launch
+    - generated config directories are stable and *not* timestamped
+    - stable config files are created only if missing
+    - a per-run runtime train YAML is created inside the run directory so the
+      output_dir can remain per-run without forcing timestamped generated YAMLs
     """
     now = dt.datetime.now()
     run_name = make_run_name(epochs, batch_size, input_size, now)
+    config_key = make_config_key(epochs, batch_size, input_size)
+
     run_dir = repo_root / "workspace" / "runs" / run_name
-    generated_root = repo_root / "generated" / run_name
+
+    dataset_slug = prepared_root.name
+    generated_root = repo_root / "generated" / dataset_slug / config_key
+
     ensure_dir(run_dir)
     ensure_dir(generated_root)
 
     preset = MODEL_PRESETS[model_key]
     base_model_yaml = edgeyolo_root / preset["base_yaml"]
-    model_yaml = generated_root / f"model_{model_key}_{run_name}.yaml"
+    model_yaml = generated_root / f"model_{model_key}.yaml"
     rewrite_model_nc(base_model_yaml, model_yaml, len(summary.class_names))
 
-    dataset_yaml = generated_root / f"dataset_{run_name}.yaml"
+    dataset_yaml = generated_root / "dataset_coco.yaml"
     dataset_payload = {
         "type": "coco",
         "dataset_path": str(prepared_root),
@@ -1121,16 +1278,16 @@ def generate_edgeyolo_configs(
         "segmentaion_enabled": False,
         "names": summary.class_names,
     }
-    write_yaml(dataset_yaml, dataset_payload)
+    write_yaml_if_missing(dataset_yaml, dataset_payload, "dataset yaml")
 
-    weights_path = ensure_pretrained_weights(edgeyolo_root, model_key)
+    weights_path = ensure_pretrained_weights(edgeyolo_root, model_key, input_size)
 
-    train_yaml = generated_root / f"train_{run_name}.yaml"
+    train_yaml = generated_root / "train.yaml"
     train_payload = {
         "model_cfg": str(model_yaml),
         "weights": str(weights_path),
         "use_cfg": False,
-        "output_dir": str(run_dir),
+        "output_dir": "__SET_AT_RUNTIME__",
         "save_checkpoint_for_each_epoch": False,
         "log_file": "log.txt",
         "dataset_cfg": str(dataset_yaml),
@@ -1174,18 +1331,36 @@ def generate_edgeyolo_configs(
         "train_start_layers": 51,
         "force_start_epoch": -1,
     }
-    write_yaml(train_yaml, train_payload)
+    write_yaml_if_missing(train_yaml, train_payload, "train yaml")
+
+    # Create a per-run runtime train YAML. This is the file actually passed to
+    # EdgeYOLO train.py. It is intentionally placed inside the run directory so:
+    # - generated YAMLs stay stable and timestamp-free
+    # - output_dir can still be unique per run
+    runtime_train_yaml = run_dir / "train_runtime.yaml"
+    runtime_payload = load_yaml_or_abort(train_yaml, "template train")
+    runtime_payload["output_dir"] = str(run_dir)
+    runtime_payload["model_cfg"] = str(model_yaml)
+    runtime_payload["dataset_cfg"] = str(dataset_yaml)
+    runtime_payload["weights"] = str(weights_path)
+    write_yaml(runtime_train_yaml, runtime_payload)
 
     manifest = GeneratedRunFiles(
         run_name=run_name,
+        config_key=config_key,
         run_dir=str(run_dir),
+        generated_root=str(generated_root),
         dataset_yaml=str(dataset_yaml),
         train_yaml=str(train_yaml),
+        runtime_train_yaml=str(runtime_train_yaml),
         model_yaml=str(model_yaml),
         weights_path=str(weights_path),
         prepared_dataset=str(prepared_root),
     )
-    (generated_root / "run_manifest.json").write_text(json.dumps(asdict(manifest), indent=2), encoding="utf-8")
+    (generated_root / "config_manifest.json").write_text(
+        json.dumps(asdict(manifest), indent=2),
+        encoding="utf-8",
+    )
     return manifest
 
 
@@ -1361,16 +1536,18 @@ def main() -> None:
         eval_interval=args.eval_interval,
     )
 
-    log(f"[configs] dataset yaml: {run_files.dataset_yaml}")
-    log(f"[configs] train yaml  : {run_files.train_yaml}")
-    log(f"[configs] model yaml  : {run_files.model_yaml}")
-    log(f"[run] output directory: {run_files.run_dir}")
+    log(f"[configs] generated root : {run_files.generated_root}")
+    log(f"[configs] dataset yaml   : {run_files.dataset_yaml}")
+    log(f"[configs] train yaml     : {run_files.train_yaml}")
+    log(f"[configs] model yaml     : {run_files.model_yaml}")
+    log(f"[configs] runtime yaml   : {run_files.runtime_train_yaml}")
+    log(f"[run] output directory    : {run_files.run_dir}")
 
     if args.prepare_only:
         log("[done] Prepare-only mode requested. Training was not started.")
         return
 
-    start_training(edgeyolo_root, Path(run_files.train_yaml))
+    start_training(edgeyolo_root, Path(run_files.runtime_train_yaml))
 
     if args.export_onnx_after_train:
         maybe_export_onnx_after_train(

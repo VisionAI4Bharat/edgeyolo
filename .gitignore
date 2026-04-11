@@ -10,3 +10,6 @@ workspace/runs/
 workspace/exports/
 third_party/edgeyolo/output/
 third_party/edgeyolo/weights/
+
+generated/
+workspace/
