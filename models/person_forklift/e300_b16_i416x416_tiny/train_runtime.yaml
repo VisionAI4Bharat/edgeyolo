@@ -1,0 +1,59 @@
+model_cfg: /workspace/edgeyolo/generated/dataforkliftv19_prepared/e300_b16_i416x416/model_tiny.yaml
+weights: /workspace/edgeyolo/third_party/edgeyolo/weights/edgeyolo_tiny_416_coco.pth
+use_cfg: false
+output_dir: /workspace/edgeyolo/workspace/runs/e300_b16_i416x416_20260411_154533
+save_checkpoint_for_each_epoch: false
+log_file: log.txt
+dataset_cfg: /workspace/edgeyolo/generated/dataforkliftv19_prepared/e300_b16_i416x416/dataset_coco.yaml
+batch_size_per_gpu: 16
+loader_num_workers: 8
+num_threads: 1
+device:
+- 0
+fp16: true
+cudnn_benchmark: true
+optimizer: SGD
+max_epoch: 300
+close_mosaic_epochs: 15
+lr_per_img: 0.00015625
+warmup_epochs: 5
+warmup_lr_ratio: 0.0
+final_lr_ratio: 0.05
+loss_use:
+- bce
+- bce
+- giou
+input_size:
+- 416
+- 416
+multiscale_range: 5
+weight_decay: 0.0005
+momentum: 0.9
+enhance_mosaic: false
+use_ema: true
+enable_mixup: true
+mixup_scale:
+- 0.5
+- 1.5
+mosaic_scale:
+- 0.1
+- 2.0
+flip_prob: 0.5
+mosaic_prob: 1
+mixup_prob: 1
+degrees: 10
+hsv_gain:
+- 0.0138
+- 0.664
+- 0.464
+eval_at_start: false
+val_conf_thres: 0.001
+val_nms_thres: 0.65
+eval_only: false
+obj_conf_enabled: true
+eval_interval: 5
+print_interval: 100
+load_optimizer_params: true
+train_backbone: true
+train_start_layers: 51
+force_start_epoch: -1
