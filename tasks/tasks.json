@@ -1,0 +1,116 @@
+[
+  {
+    "subject": "Set up project structure for Qt6 EdgeYOLO GUI application",
+    "description": "Create the directory structure for the Qt6 application including src directory and basic CMakeLists.txt",
+    "status": "completed",
+    "activeForm": "Setting up project structure"
+  },
+  {
+    "subject": "Create basic CMakeLists.txt with Qt6/FetchContent setup",
+    "description": "Create CMakeLists.txt that uses FetchContent for Qt6 (with Qt5 fallback), OpenCV, and other dependencies",
+    "status": "completed",
+    "activeForm": "Creating CMake configuration"
+  },
+  {
+    "subject": "Implement MainWindow class with QSplitter layout",
+    "description": "Create MainWindow class that sets up the main application window with left/right panes using QSplitter",
+    "status": "completed",
+    "activeForm": "Implementing MainWindow"
+  },
+  {
+    "subject": "Create VideoWidget for video display and bounding box editing",
+    "description": "Implement custom QWidget for displaying video frames and handling mouse events for bounding box creation/editing",
+    "status": "completed",
+    "activeForm": "Creating VideoWidget"
+  },
+  {
+    "subject": "Implement ConfigDialog (combined config/model/camera/source)",
+    "description": "Full production ConfigDialog covering ONNX model selection, camera/video-file/RTSP source with v4l2-ctl enumeration, resolution, FPS, V4L2 controls, ROI, info panel and input validation. Replaces the former separate model and camera dialogs.",
+    "status": "completed",
+    "activeForm": "Implementing ConfigDialog"
+  },
+  {
+    "subject": "Define IDetector abstract interface",
+    "description": "Create src/inference/IDetector.h with the pure-abstract IDetector base class. Exposes: load(modelPath, confThres, nmsThres) -> bool; infer(cv::Mat) -> vector<Detection>; classNames() -> vector<string>; inputSize() -> cv::Size; virtual destructor. Detection struct: cv::Rect_<float> rect, int classId, float confidence.",
+    "status": "completed",
+    "activeForm": "Defining IDetector interface"
+  },
+  {
+    "subject": "Implement OnnxDetector using ONNX Runtime",
+    "description": "Create src/inference/OnnxDetector.h/.cpp. Uses onnxruntime C++ API (Ort::Session). Model is the EdgeYOLO fused-head ONNX export: input [B,3,H,W], output [B,N,7] where 7 = cx,cy,w,h,obj_conf,cls0,cls1. Pre-processing: letterbox resize via detect::resizeAndPad from common.hpp. Post-processing: mirrors mnn_det::YOLO::generate_yolo_proposals — multiply obj_conf*cls_score, threshold, scale back by factor, NMS via detect::nms_sorted_bboxes. Reads class names and img_size from sidecar .yaml (same base name as .onnx). Supports INT8 quantised models natively via ORT. Batch size fixed to 1 at runtime (slice first batch element).",
+    "status": "completed",
+    "activeForm": "Implementing ONNX Runtime backend"
+  },
+  {
+    "subject": "Implement OpenVinoDetector using OpenVINO IE",
+    "description": "Create src/inference/OpenVinoDetector.h/.cpp. Uses openvino/openvino.hpp (OpenVINO 2022+ unified API). Loads same .onnx model via ov::Core::compile_model(). Same pre/post-processing as OnnxDetector (fused head [B,N,7]). Guard entire file with #ifdef WITH_OPENVINO.",
+    "status": "completed",
+    "activeForm": "Implementing OpenVINO backend"
+  },
+  {
+    "subject": "Implement RknnDetector wrapping upstream RKNN::YOLO",
+    "description": "Create src/inference/RknnDetector.h/.cpp. Wraps RKNN::YOLO from third_party/edgeyolo/cpp/rknn/include/image_utils/rknn.h. Calls load_model() and infer(cv::Mat). The RKNN backend uses a decoupled 9-output INT8 head (different from the ONNX fused head) — post-processing is already handled inside RKNN::YOLO. Translate vector<detect::Object> to vector<Detection>. Target RV1106: set NPU core mask to RKNN_NPU_CORE_0. Guard with #ifdef WITH_RKNN.",
+    "status": "completed",
+    "activeForm": "Implementing RKNN backend"
+  },
+  {
+    "subject": "Implement DetectorFactory",
+    "description": "Create src/inference/DetectorFactory.h/.cpp. enum class Backend { ONNX, OPENVINO, RKNN }. Static create(Backend, modelPath, confThres, nmsThres) -> unique_ptr<IDetector>. Throws std::runtime_error if backend not compiled in or load fails.",
+    "status": "completed",
+    "activeForm": "Implementing DetectorFactory"
+  },
+  {
+    "subject": "Add backend selector to ConfigDialog and update CMakeLists.txt",
+    "description": "Add QComboBox to ConfigDialog for ONNX / OpenVINO / RKNN. Expose getBackend(). Disable RKNN/OpenVINO options at runtime if not compiled in. Add WITH_OPENVINO and WITH_RKNN CMake options. Add src/inference/*.cpp to SOURCES. Link onnxruntime unconditionally; find_package OpenVINO if WITH_OPENVINO; add RKNN headers/libs if WITH_RKNN.",
+    "status": "completed",
+    "activeForm": "Wiring backend selector"
+  },
+  {
+    "subject": "Rewrite DetectionWorker and MainWindow to use IDetector",
+    "description": "Replace void* detector_ with unique_ptr<IDetector> in MainWindow. DetectionWorker holds raw IDetector* (non-owning). DetectionWorker::run() calls detector->infer(frame), measures inference latency with chrono, emits real results. MainWindow::initializeDetector() uses DetectorFactory. Stop worker before swapping detector. Populate object checkboxes from classNames() after load.",
+    "status": "completed",
+    "activeForm": "Wiring IDetector into worker"
+  },
+  {
+    "subject": "Implement Edit/Run mode switching logic",
+    "description": "Switch VideoWidget between edit (bounding box draw) and run (detection overlay) mode. In run mode start/resume DetectionWorker; in edit mode pause it.",
+    "status": "completed",
+    "activeForm": "Implementing mode switching"
+  },
+  {
+    "subject": "Add performance metrics display (FPS, latency, time)",
+    "description": "Real-time FPS, inference latency, NMS latency, 30-frame average latency, current time. Data from DetectionWorker signals.",
+    "status": "completed",
+    "activeForm": "Adding metrics display"
+  },
+  {
+    "subject": "Implement object selection checkboxes",
+    "description": "Dynamic checkboxes from IDetector::classNames() after model load. Filter applied in DetectionWorker before emitting.",
+    "status": "completed",
+    "activeForm": "Creating object selection UI"
+  },
+  {
+    "subject": "Implement bounding box saving/loading to config file",
+    "description": "Save ROI bounding box to sidecar YAML and load on startup / after config accepted.",
+    "status": "completed",
+    "activeForm": "Implementing config persistence"
+  },
+  {
+    "subject": "Fix pre-build issues blocking desktop test",
+    "description": "Fixed 7 issues preventing compilation: missing widgetToImageCoordinates declaration, QDesktopWidget removed in Qt6, cv::cvtColor on cv::Scalar (compile error), update() from non-GUI capture thread (crash), QPixmap created in non-GUI thread (crash), qtImage_ unprotected cross-thread access, setEditMode(false) clearing the ROI box. Updated CMakeLists.txt to use FetchContent for ONNX Runtime (prebuilt) and yaml-cpp (source build). Build is now clean.",
+    "status": "completed",
+    "activeForm": "Fixing build issues"
+  },
+  {
+    "subject": "Test with INT8 ONNX model on desktop",
+    "description": "Verify full pipeline with edgeyolo_person_forklift_tiny_416_opset13_416x416_b16.onnx and camera/video on desktop using ONNX Runtime backend.",
+    "status": "pending",
+    "activeForm": "Testing ONNX backend"
+  },
+  {
+    "subject": "Cross-compile and test RKNN backend on RV1106",
+    "description": "Cross-compile with WITH_RKNN=ON for RV1106 target. Verify RKNN::YOLO inference pipeline end-to-end.",
+    "status": "pending",
+    "activeForm": "Testing RKNN backend"
+  }
+]
