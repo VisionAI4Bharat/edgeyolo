@@ -187,7 +187,17 @@ void ConfigDialog::setupModelSection(QVBoxLayout* parent)
     // Model file row
     modelFilePathEdit_ = new QLineEdit(this);
     modelFilePathEdit_->setReadOnly(true);
-    modelFilePathEdit_->setPlaceholderText("Select model file (.onnx / .rknn)…");
+    modelFilePathEdit_->setPlaceholderText("Select model file (.onnx / .xml / .rknn)…");
+    connect(backendComboBox_, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, [this](int) {
+        const inference::Backend b = getBackend();
+        if (b == inference::Backend::RKNN)
+            modelFilePathEdit_->setPlaceholderText("Select RKNN INT8 model (.rknn)…");
+        else if (b == inference::Backend::OPENVINO)
+            modelFilePathEdit_->setPlaceholderText("Select OpenVINO IR model (.xml)…");
+        else
+            modelFilePathEdit_->setPlaceholderText("Select ONNX model (.onnx)…");
+    });
     browseModelButton_ = new QPushButton("Browse…", this);
     connect(browseModelButton_, &QPushButton::clicked, this, &ConfigDialog::browseModelFile);
 
@@ -651,15 +661,27 @@ int ConfigDialog::getHeight() const
 void ConfigDialog::browseModelFile()
 {
     const inference::Backend backend = getBackend();
-    const bool isRknn = (backend == inference::Backend::RKNN);
 
-    const QString filter = isRknn
-        ? "RKNN Models (*.rknn);;All Files (*)"
-        : "ONNX Models (*.onnx);;All Files (*)";
+    QString filter, title;
+    switch (backend) {
+        case inference::Backend::RKNN:
+            filter = "RKNN INT8 Models (*.rknn);;All Files (*)";
+            title  = "Select RKNN INT8 Model";
+            break;
+        case inference::Backend::OPENVINO:
+            filter = "OpenVINO IR Models (*.xml);;All Files (*)";
+            title  = "Select OpenVINO IR Model (.xml)";
+            break;
+        case inference::Backend::ONNX:
+        default:
+            filter = "ONNX Models (*.onnx);;All Files (*)";
+            title  = "Select ONNX Model";
+            break;
+    }
 
     const QString path = QFileDialog::getOpenFileName(
         this,
-        isRknn ? "Select RKNN Model" : "Select ONNX Model",
+        title,
         modelFilePath_.isEmpty() ? QDir::homePath() : QFileInfo(modelFilePath_).absolutePath(),
         filter
     );
