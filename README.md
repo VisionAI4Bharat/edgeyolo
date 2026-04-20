@@ -582,6 +582,70 @@ workspace/exports/<weights_stem>/
 
 ---
 
+## 15. Class YAML Format
+
+For ONNX and other inference backends, EdgeYOLO requires a YAML file that defines the class names and optionally the input size. This file should be placed next to the model file with the same base name (e.g., `model.onnx` and `model.yaml`) or specified explicitly in the configuration dialog.
+
+### YAML Structure
+```yaml
+names:
+  - person
+  - forklift
+  - # ... additional classes
+```
+
+### Optional Input Size
+You can explicitly specify the input size if needed:
+```yaml
+names:
+  - person
+  - forklift
+img_size: [416, 416]  # [height, width]
+```
+
+If `img_size` is not specified, the wrapper will attempt to infer the input size from the ONNX model metadata.
+
+---
+
+## 16. Persistent Settings Storage
+
+The EdgeYOLO Qt GUI automatically saves and loads Region of Interest (ROI) configurations to enable persistence across sessions.
+
+### ROI Storage Location
+ROI configurations are stored in YAML files located in the same directory as the model file, using the naming convention:
+```
+<modelBaseName>_roi.yaml
+```
+For example, if your model is at `/path/to/yolov5s.onnx`, the ROI configuration will be stored in `/path/to/yolov5s_roi.yaml`.
+
+### ROI YAML Format
+```yaml
+roi:
+  x: 100      # X coordinate of top-left corner
+  y: 50       # Y coordinate of top-left corner
+  width: 300  # Width in pixels
+  height: 200 # Height in pixels
+```
+
+The GUI also supports storing class names in the same YAML file under the `names` key, allowing a single configuration file to contain both ROI and class information:
+```yaml
+roi:
+  x: 100
+  y: 50
+  width: 300
+  height: 200
+names:
+  - person
+  - forklift
+```
+
+### Automatic Loading/Saving
+- When a model is loaded, the GUI automatically looks for `<modelBaseName>_roi.yaml` and loads the ROI if present
+- When drawing or modifying an ROI in Edit mode, changes are immediately saved to the same YAML file
+- If no ROI YAML exists, the GUI starts with no ROI filtering enabled
+
+---
+
 ## 15. Minimal command summary
 
 ### Create repo + submodule

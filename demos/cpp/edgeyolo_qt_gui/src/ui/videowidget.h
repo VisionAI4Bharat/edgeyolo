@@ -49,6 +49,12 @@ public:
      */
     void saveRoiToConfig(const QString& configPath);
 
+    void stopCaptureThread();
+    void setClassNames(const QStringList& names);
+
+    /** Enable/disable verbose debug logging (forwards to the global Debug flag). */
+    void setDebugLogging(bool enabled);
+
 signals:
     void boundingBoxChanged(const QRect& box);
     /** Emitted for every decoded frame, carrying the raw BGR cv::Mat. */
@@ -63,7 +69,6 @@ protected:
 private:
     void updateFrame();
     void startCaptureThread();
-    void stopCaptureThread();
     QPointF widgetToImageCoordinates(const QPointF& widgetPos);
 
     // Video capture

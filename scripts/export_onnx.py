@@ -89,6 +89,26 @@ def patch_edgeyolo_for_torch26(edgeyolo_root: Path) -> None:
         log(f"[patch] Patched EdgeYOLO torch.load compatibility: {target}")
 
 
+def quantize_onnx(src: Path, dst: Path, mode: str) -> None:
+    try:
+        from onnxruntime.quantization import quantize_dynamic, QuantType
+        from onnxruntime.quantization import quantize_static, CalibrationDataReader
+    except ImportError:
+        raise SystemExit("ERROR: onnxruntime-tools not found. Install with: pip install onnxruntime-tools")
+
+    if mode == "dynamic":
+        log(f"[quantize] Dynamic INT8 quantization: {src} → {dst}")
+        quantize_dynamic(
+            str(src),
+            str(dst),
+            weight_type=QuantType.QInt8,
+        )
+    else:
+        raise SystemExit(f"ERROR: Unknown quantize mode '{mode}'. Supported: dynamic")
+
+    log(f"[quantize] Saved quantized model to: {dst}")
+
+
 def find_latest_onnx(edgeyolo_root: Path) -> Path:
     export_root = edgeyolo_root / "output" / "export"
     if not export_root.exists():
@@ -107,6 +127,8 @@ def main() -> None:
     parser.add_argument("--opset", type=int, default=13, help="ONNX opset version")
     parser.add_argument("--edgeyolo-root", default=None, help="Optional manual EdgeYOLO root override")
     parser.add_argument("--no-simplify", action="store_true", help="Pass --no-simplify to EdgeYOLO export.py")
+    parser.add_argument("--quantize", choices=["dynamic"], default=None,
+                        help="Post-export quantization. 'dynamic' = dynamic INT8 via onnxruntime")
     args = parser.parse_args()
 
     repo_root = repo_root_from_script()
@@ -144,7 +166,7 @@ def main() -> None:
     dst = export_dir / export_name
     shutil.copy2(latest_onnx, dst)
 
-    manifest = {
+    manifest: dict = {
         "weights": str(weights),
         "edgeyolo_export_output": str(latest_onnx),
         "copied_export": str(dst),
@@ -152,6 +174,15 @@ def main() -> None:
         "batch": args.batch,
         "input_size": args.input_size,
     }
+
+    if args.quantize:
+        q_name = f"{weights.stem}_opset{args.opset}_{args.input_size}x{args.input_size}_b{args.batch}_{args.quantize}int8.onnx"
+        q_dst = export_dir / q_name
+        quantize_onnx(dst, q_dst, args.quantize)
+        manifest["quantized_export"] = str(q_dst)
+        manifest["quantize_mode"]    = args.quantize
+        log(f"[done] Quantized model: {q_dst}")
+
     (export_dir / "export_manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
     log(f"[done] ONNX export copied to: {dst}")

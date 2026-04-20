@@ -1,4 +1,5 @@
 #include "videowidget.h"
+#include "../debug_log.h"
 #include <QPainter>
 #include <QMouseEvent>
 #include <QApplication>
@@ -7,10 +8,16 @@
 #include <QDebug>
 #include <fstream>
 #include <stdexcept>
+#include <chrono>
 #include <yaml-cpp/yaml.h>
 #include <opencv2/opencv.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/highgui.hpp>
+
+// Component tag used with the shared DBG_LOG / ERR_LOG macros.
+#define VW_TAG "VideoWidget"
+
+void VideoWidget::setDebugLogging(bool enabled) { Debug::setEnabled(enabled); }
 
 VideoWidget::VideoWidget(QWidget *parent) : QWidget(parent),
     running_(false),
@@ -76,6 +83,12 @@ void VideoWidget::setDetectionResults(const QVector<QRect>& boxes,
     update(); // Trigger repaint
 }
 
+void VideoWidget::setClassNames(const QStringList& names)
+{
+    QMutexLocker locker(&resultsMutex_);
+    classNames_ = names;
+}
+
 void VideoWidget::loadRoiFromConfig(const QString& configPath)
 {
     if (configPath.isEmpty()) return;
@@ -101,14 +114,20 @@ void VideoWidget::loadRoiFromConfig(const QString& configPath)
 
             if (w > 0 && h > 0) {
                 const QRect box(x, y, w, h);
+                DBG_LOG(VW_TAG, "loaded ROI from '%s': (%d,%d) %dx%d\n",
+                    path.c_str(), x, y, w, h);
                 {
                     QMutexLocker locker(&frameMutex_);
                     boundingBox_ = box;
                 }
                 emit boundingBoxChanged(box);
                 update();
-                qDebug() << "VideoWidget: loaded ROI from config:" << box;
+            } else {
+                DBG_LOG(VW_TAG, "roi key present in '%s' but w/h invalid (%dx%d) — skipped\n",
+                    path.c_str(), w, h);
             }
+        } else {
+            DBG_LOG(VW_TAG, "no roi key in '%s'\n", path.c_str());
         }
 
         // Optionally refresh class names list from the same file
@@ -116,10 +135,12 @@ void VideoWidget::loadRoiFromConfig(const QString& configPath)
             classNames_.clear();
             for (const auto& n : cfg["names"])
                 classNames_.append(QString::fromStdString(n.as<std::string>()));
+            DBG_LOG(VW_TAG, "loaded %lld class names from '%s'\n",
+                static_cast<long long>(classNames_.size()), path.c_str());
         }
     }
     catch (const YAML::Exception& e) {
-        qWarning() << "VideoWidget::loadRoiFromConfig: YAML error:" << e.what();
+        ERR_LOG(VW_TAG, "loadRoiFromConfig YAML error in '%s': %s\n", path.c_str(), e.what());
     }
 }
 
@@ -174,7 +195,8 @@ void VideoWidget::saveRoiToConfig(const QString& configPath)
         throw std::runtime_error(
             "VideoWidget::saveRoiToConfig: write error to: " + path);
 
-    qDebug() << "VideoWidget: saved ROI" << box << "to" << configPath;
+    DBG_LOG(VW_TAG, "saved ROI (%d,%d %dx%d) to '%s'\n",
+        box.x(), box.y(), box.width(), box.height(), path.c_str());
 }
 
 void VideoWidget::updateFrame() {
@@ -286,7 +308,7 @@ void VideoWidget::updateFrame() {
 
 void VideoWidget::startCaptureThread() {
     running_ = true;
-    const int    camId  = cameraDeviceId_;
+    const int     camId  = cameraDeviceId_;
     const QString vsPath = videoSourcePath_;
 
     captureThread_ = QThread::create([this, camId, vsPath]() {
@@ -301,8 +323,10 @@ void VideoWidget::startCaptureThread() {
         }
 
         if (!capture_.isOpened()) {
-            qWarning() << "VideoWidget: failed to open source"
-                       << (vsPath.isEmpty() ? QString("camera %1").arg(camId) : vsPath);
+            ERR_LOG(VW_TAG, "failed to open source: %s\n",
+                vsPath.isEmpty()
+                    ? QString("camera %1").arg(camId).toStdString().c_str()
+                    : vsPath.toStdString().c_str());
             return;
         }
 
@@ -313,16 +337,48 @@ void VideoWidget::startCaptureThread() {
             capture_.set(cv::CAP_PROP_FPS,          30);
         }
 
+        // Determine per-frame target delay.
+        // For cameras, read() blocks in V4L2 at the hardware rate — use a minimal
+        // yield sleep so we don't busy-spin but don't add extra delay.
+        // For video files / RTSP, honour the container FPS so playback is real-time.
+        int frameDelayMs = 1;   // cameras: near-zero extra sleep
+        if (!vsPath.isEmpty()) {
+            const double srcFps = capture_.get(cv::CAP_PROP_FPS);
+            if (srcFps > 0.0 && srcFps <= 240.0)
+                frameDelayMs = static_cast<int>(1000.0 / srcFps);
+            else
+                frameDelayMs = 33;  // fallback ~30 fps
+            DBG_LOG(VW_TAG, "opened '%s'  reported FPS=%.2f  frameDelayMs=%d\n",
+                vsPath.toStdString().c_str(), srcFps, frameDelayMs);
+        } else {
+            const double srcFps = capture_.get(cv::CAP_PROP_FPS);
+            const int    w      = static_cast<int>(capture_.get(cv::CAP_PROP_FRAME_WIDTH));
+            const int    h      = static_cast<int>(capture_.get(cv::CAP_PROP_FRAME_HEIGHT));
+            DBG_LOG(VW_TAG, "opened camera %d  %dx%d  reported FPS=%.2f\n", camId, w, h, srcFps);
+        }
+
+        using Clock     = std::chrono::steady_clock;
+        using Ms        = std::chrono::milliseconds;
+        uint64_t frameN = 0;
+
         while (running_) {
+            const auto frameStart = Clock::now();
+
             cv::Mat frame;
             if (!capture_.read(frame) || frame.empty()) {
                 if (!vsPath.isEmpty()) {
                     // End of video file — loop back
+                    DBG_LOG(VW_TAG, "end of file, looping back (frame %llu)\n",
+                        static_cast<unsigned long long>(frameN));
                     capture_.set(cv::CAP_PROP_POS_FRAMES, 0);
+                } else {
+                    ERR_LOG(VW_TAG, "failed to read frame from camera %d\n", camId);
                 }
                 QThread::msleep(10);
                 continue;
             }
+
+            ++frameN;
 
             {
                 QMutexLocker locker(&frameMutex_);
@@ -333,10 +389,22 @@ void VideoWidget::startCaptureThread() {
             emit frameReady(frame);
 
             updateFrame();
-            QThread::msleep(10);
+
+            if (frameN % 90 == 0) {
+                DBG_LOG(VW_TAG, "capture heartbeat: frame %llu\n",
+                    static_cast<unsigned long long>(frameN));
+            }
+
+            // Sleep for the remainder of the target frame period
+            const auto elapsed = std::chrono::duration_cast<Ms>(Clock::now() - frameStart).count();
+            const int  sleepMs = frameDelayMs - static_cast<int>(elapsed);
+            if (sleepMs > 0)
+                QThread::msleep(static_cast<unsigned long>(sleepMs));
         }
 
         capture_.release();
+        DBG_LOG(VW_TAG, "capture thread exited after %llu frames\n",
+            static_cast<unsigned long long>(frameN));
     });
     captureThread_->start();
 }
