@@ -233,13 +233,18 @@ set(HEADERS
 
 # ─── executable ──────────────────────────────────────────────────────────────
 if(BUILD_DEMO)
+    set(RESOURCES assets/assets.qrc)
+    set_source_files_properties(${RESOURCES} PROPERTIES AUTORCC ON)
+
     add_executable(edgeyolo_qt_gui ${SOURCES}
         src/inference/edgeyolo_bridge.cpp
-        src/inference/edgeyolo_bridge.h)
+        src/inference/edgeyolo_bridge.h
+        ${RESOURCES})
 
     # Qt auto-moc + runtime search path for the fetched ONNX Runtime shared library
     set_target_properties(edgeyolo_qt_gui PROPERTIES
         AUTOMOC ON
+        AUTORCC ON
         BUILD_RPATH           "${ORT_CACHE_DIR}/lib"
         INSTALL_RPATH         "${ORT_CACHE_DIR}/lib"
         INSTALL_RPATH_USE_LINK_PATH TRUE

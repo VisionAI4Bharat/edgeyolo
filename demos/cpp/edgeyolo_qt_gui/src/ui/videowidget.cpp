@@ -30,6 +30,8 @@ VideoWidget::VideoWidget(QWidget *parent) : QWidget(parent),
     setMinimumSize(640, 480);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
+    logoPixmap_.load(":/assets/logo.png");
+
     // Start video capture thread
     startCaptureThread();
 }
@@ -311,15 +313,27 @@ void VideoWidget::startCaptureThread() {
     const int     camId  = cameraDeviceId_;
     const QString vsPath = videoSourcePath_;
 
-    captureThread_ = QThread::create([this, camId, vsPath]() {
+    const bool rknn = rockchipHw_;
+
+    captureThread_ = QThread::create([this, camId, vsPath, rknn]() {
         if (vsPath.isEmpty()) {
-            // Camera source
-            capture_.open(camId, cv::CAP_V4L2);
-            if (!capture_.isOpened())
-                capture_.open(camId);  // fallback to default backend
+            if (rknn) {
+                // ── Rockchip camera path (RV1106 / MIPI / V4L2 NPU-aware) ──────
+                // TODO: initialise Rockchip camera pipeline here
+            } else {
+                // ── Standard camera path ─────────────────────────────────────
+                capture_.open(camId, cv::CAP_V4L2);
+                if (!capture_.isOpened())
+                    capture_.open(camId);  // fallback to default backend
+            }
         } else {
-            // Video file or RTSP
-            capture_.open(vsPath.toStdString());
+            if (rknn) {
+                // ── Rockchip RTSP path (hardware-decoded RTSP on RV1106) ─────
+                // TODO: initialise Rockchip RTSP pipeline here
+            } else {
+                // ── Standard RTSP / video file path ──────────────────────────
+                capture_.open(vsPath.toStdString());
+            }
         }
 
         if (!capture_.isOpened()) {
@@ -439,6 +453,16 @@ void VideoWidget::paintEvent(QPaintEvent *event) {
         const int x = (width()  - qtPixmap_.width())  / 2;
         const int y = (height() - qtPixmap_.height()) / 2;
         painter.drawPixmap(x, y, qtPixmap_);
+
+        // Logo overlay — bottom-right corner, 70% opacity
+        if (!logoPixmap_.isNull()) {
+            constexpr int kPadding = 10;
+            const int lx = x + qtPixmap_.width()  - logoPixmap_.width()  - kPadding;
+            const int ly = y + qtPixmap_.height() - logoPixmap_.height() - kPadding;
+            painter.setOpacity(0.70);
+            painter.drawPixmap(lx, ly, logoPixmap_);
+            painter.setOpacity(1.0);
+        }
     } else {
         painter.setPen(Qt::white);
         painter.setFont(QFont("Arial", 16));

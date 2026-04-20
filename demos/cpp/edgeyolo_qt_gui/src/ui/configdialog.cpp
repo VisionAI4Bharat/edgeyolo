@@ -79,7 +79,7 @@ static QVector<QPair<int,QString>> enumerateCameras() noexcept
 
 ConfigDialog::ConfigDialog(QWidget *parent) : QDialog(parent)
 {
-    setWindowTitle("EdgeYOLO Configuration");
+    setWindowTitle("deepSightAI Configurator");
     setModal(true);
     setMinimumWidth(520);
 
@@ -101,6 +101,7 @@ ConfigDialog::ConfigDialog(QWidget *parent) : QDialog(parent)
     setupCameraSection(mainLayout);
     setupVideoFileSection(mainLayout);
     setupRtspSection(mainLayout);
+    setupRockchipSection(mainLayout);
     mainLayout->addWidget(makeSeparator());
     setupResolutionSection(mainLayout);
     setupFpsSection(mainLayout);
@@ -242,15 +243,18 @@ void ConfigDialog::setupSourceSection(QVBoxLayout* parent)
 void ConfigDialog::setupCameraSection(QVBoxLayout* parent)
 {
     cameraGroup_ = new QGroupBox("Camera Device", this);
-    QHBoxLayout* lay = new QHBoxLayout(cameraGroup_);
+    QVBoxLayout* vlay = new QVBoxLayout(cameraGroup_);
 
     cameraComboBox_       = new QComboBox(this);
     refreshCamerasButton_ = new QPushButton("Refresh", this);
 
     connect(refreshCamerasButton_, &QPushButton::clicked, this, &ConfigDialog::refreshCameras);
 
+    QHBoxLayout* lay = new QHBoxLayout();
     lay->addWidget(cameraComboBox_, 1);
     lay->addWidget(refreshCamerasButton_);
+    vlay->addLayout(lay);
+
     parent->addWidget(cameraGroup_);
 
     populateCameras();
@@ -282,6 +286,16 @@ void ConfigDialog::setupRtspSection(QVBoxLayout* parent)
 
     lay->addWidget(rtspUrlEdit_);
     parent->addWidget(rtspGroup_);
+}
+
+void ConfigDialog::setupRockchipSection(QVBoxLayout* parent)
+{
+    rockchipHwCheckbox_ = new QCheckBox("Rockchip Hardware", this);
+    rockchipHwCheckbox_->setToolTip(
+        "When checked, selects the RKNN backend and enables Rockchip NPU inference.\n"
+        "Only applicable for Camera and RTSP sources.\n"
+        "Requires WITH_RKNN compiled in and a .rknn model file.");
+    parent->addWidget(rockchipHwCheckbox_);
 }
 
 void ConfigDialog::setupResolutionSection(QVBoxLayout* parent)
@@ -500,6 +514,11 @@ void ConfigDialog::updateSourceVisibility()
     const bool isRtsp      = rtspRadio_->isChecked();
 
     cameraGroup_->setVisible(isCamera);
+    if (rockchipHwCheckbox_) {
+        const bool hwEnabled = isCamera || isRtsp;
+        rockchipHwCheckbox_->setEnabled(hwEnabled);
+        if (!hwEnabled) rockchipHwCheckbox_->setChecked(false);
+    }
     v4l2ControlsGroup_->setVisible(isCamera);
     videoFileGroup_->setVisible(isVideoFile);
     rtspGroup_->setVisible(isRtsp);
@@ -640,7 +659,7 @@ void ConfigDialog::browseModelFile()
 
     const QString path = QFileDialog::getOpenFileName(
         this,
-        isRknn ? "Select RKNN Model" : "Select EdgeYOLO ONNX Model",
+        isRknn ? "Select RKNN Model" : "Select ONNX Model",
         modelFilePath_.isEmpty() ? QDir::homePath() : QFileInfo(modelFilePath_).absolutePath(),
         filter
     );
@@ -890,6 +909,7 @@ void ConfigDialog::saveConfig()
     cfg["brightness"]       = brightnessSpinBox_->value();
     cfg["conf_threshold"]   = confThresSpin_->value();
     cfg["nms_threshold"]    = nmsThresSpin_->value();
+    cfg["rockchip_hw"]      = rockchipHwCheckbox_->isChecked();
 
     if (!classLabels_.isEmpty()) {
         YAML::Node lblNode;
@@ -1020,7 +1040,9 @@ void ConfigDialog::loadConfig()
                 .arg(roi_.x()).arg(roi_.y()).arg(roi_.width()).arg(roi_.height()));
     }
 
-    // Debug
+    // Rockchip / Debug
+    if (cfg["rockchip_hw"])
+        rockchipHwCheckbox_->setChecked(cfg["rockchip_hw"].as<bool>(false));
     if (cfg["debug_logging"])
         debugLoggingCheckbox_->setChecked(cfg["debug_logging"].as<bool>(false));
 }

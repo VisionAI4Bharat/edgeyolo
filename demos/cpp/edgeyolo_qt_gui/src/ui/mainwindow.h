@@ -93,6 +93,8 @@ public:
     explicit MainWindow(QWidget* parent = nullptr);
     ~MainWindow() override;
 
+    void loadFromConfigFile(const QString& configPath);
+
 private slots:
     void openConfigDialog();
     void onDetectionResults(QVector<QRect>  boxes,

@@ -49,7 +49,8 @@ public:
     int     getBrightness() const { return brightnessSpinBox_->value(); }
     QRect   getRoi() const        { return roi_; }
     bool    isRoiEnabled() const  { return enableRoiCheckbox_->isChecked(); }
-    bool    isDebugLoggingEnabled() const { return debugLoggingCheckbox_ && debugLoggingCheckbox_->isChecked(); }
+    bool    isDebugLoggingEnabled()  const { return debugLoggingCheckbox_ && debugLoggingCheckbox_->isChecked(); }
+    bool    isRockchipHardware()    const { return rockchipHwCheckbox_    && rockchipHwCheckbox_->isChecked(); }
     float        getConfThreshold() const { return confThresSpin_ ? static_cast<float>(confThresSpin_->value()) : 0.25f; }
     float        getNmsThreshold()  const { return nmsThresSpin_  ? static_cast<float>(nmsThresSpin_->value())  : 0.45f; }
     QStringList  getClassLabels()   const { return classLabels_; }
@@ -79,6 +80,7 @@ private:
     void setupCameraSection(QVBoxLayout* parent);
     void setupVideoFileSection(QVBoxLayout* parent);
     void setupRtspSection(QVBoxLayout* parent);
+    void setupRockchipSection(QVBoxLayout* parent);
     void setupResolutionSection(QVBoxLayout* parent);
     void setupV4l2Section(QVBoxLayout* parent);
     void setupFpsSection(QVBoxLayout* parent);
@@ -168,6 +170,7 @@ private:
     // — Debug —
     QGroupBox*  debugGroup_           = nullptr;
     QCheckBox*  debugLoggingCheckbox_ = nullptr;
+    QCheckBox*  rockchipHwCheckbox_   = nullptr;
 
     // — Dialog buttons —
     QPushButton* okButton_            = nullptr;

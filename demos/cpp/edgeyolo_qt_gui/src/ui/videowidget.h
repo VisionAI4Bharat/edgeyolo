@@ -51,6 +51,7 @@ public:
 
     void stopCaptureThread();
     void setClassNames(const QStringList& names);
+    void setRockchipHardware(bool enabled) { rockchipHw_ = enabled; }
 
     /** Enable/disable verbose debug logging (forwards to the global Debug flag). */
     void setDebugLogging(bool enabled);
@@ -113,6 +114,12 @@ private:
 
     // Class names for object selection (populated from config)
     QStringList classNames_;
+
+    // Rockchip hardware mode
+    bool rockchipHw_ = false;
+
+    // Logo overlay
+    QPixmap logoPixmap_;
 };
 
 #endif // VIDEOWIDGET_H

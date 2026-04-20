@@ -7,6 +7,7 @@
 #include <QDebug>
 
 #include <chrono>
+#include <yaml-cpp/yaml.h>
 
 #define MW_TAG  "MainWindow"
 #define WK_TAG  "DetWorker"
@@ -161,7 +162,7 @@ MainWindow::~MainWindow()
 
 void MainWindow::setupUI()
 {
-    setWindowTitle("EdgeYOLO Qt GUI");
+    setWindowTitle("deepSightAI");
     resize(1280, 800);
 
     mainSplitter_ = new QSplitter(Qt::Horizontal, this);
@@ -221,6 +222,66 @@ void MainWindow::setupConnections()
 
 // ─── config ───────────────────────────────────────────────────────────────────
 
+void MainWindow::loadFromConfigFile(const QString& configPath)
+{
+    YAML::Node cfg;
+    try {
+        cfg = YAML::LoadFile(configPath.toStdString());
+    } catch (const YAML::Exception& e) {
+        QMessageBox::critical(this, "Config Error",
+            QString("Failed to parse config file:\n%1\n\n%2").arg(configPath).arg(e.what()));
+        return;
+    }
+
+    stopWorker();
+
+    debugLogging_ = cfg["debug_logging"].as<bool>(false);
+    Debug::setEnabled(debugLogging_);
+
+    modelFilePath_ = QString::fromStdString(cfg["model_file"].as<std::string>(""));
+    yamlFilePath_  = QString::fromStdString(cfg["yaml_file"].as<std::string>(""));
+
+    const int srcId = cfg["source"].as<int>(0);
+    isUsingVideoFile_  = (srcId == 1);
+    isUsingRtspStream_ = (srcId == 2);
+
+    if (isUsingVideoFile_ || isUsingRtspStream_) {
+        const QString path = isUsingVideoFile_
+            ? QString::fromStdString(cfg["video_file"].as<std::string>(""))
+            : QString::fromStdString(cfg["rtsp_url"].as<std::string>(""));
+        videoWidget_->setVideoSource(path);
+        statusBar_->showMessage("Source: " + path);
+    } else {
+        const int camId = cfg["camera_device_id"].as<int>(0);
+        videoWidget_->setCameraDevice(camId);
+        statusBar_->showMessage("Camera device: " + QString::number(camId));
+    }
+
+    {
+        QFileInfo fi(modelFilePath_);
+        roiConfigPath_ = fi.absolutePath() + "/" + fi.completeBaseName() + "_roi.yaml";
+    }
+
+    const bool rockchipHw = cfg["rockchip_hw"].as<bool>(false);
+    videoWidget_->setRockchipHardware(rockchipHw);
+    inference::Backend backend = rockchipHw
+        ? inference::Backend::RKNN
+        : static_cast<inference::Backend>(cfg["backend"].as<int>(0));
+
+    const float confThres = static_cast<float>(cfg["conf_threshold"].as<double>(0.25));
+    const float nmsThres  = static_cast<float>(cfg["nms_threshold"].as<double>(0.45));
+
+    QStringList classLabels;
+    if (cfg["class_labels"])
+        for (const auto& n : cfg["class_labels"])
+            classLabels << QString::fromStdString(n.as<std::string>());
+
+    initializeDetector(backend, modelFilePath_, yamlFilePath_,
+                       confThres, nmsThres, classLabels);
+
+    videoWidget_->loadRoiFromConfig(roiConfigPath_);
+}
+
 void MainWindow::openConfigDialog()
 {
     ConfigDialog dlg(this);
@@ -255,8 +316,16 @@ void MainWindow::openConfigDialog()
         roiConfigPath_ = fi.absolutePath() + "/" + fi.completeBaseName() + "_roi.yaml";
     }
 
+    const bool rockchipHw = dlg.isRockchipHardware();
+    videoWidget_->setRockchipHardware(rockchipHw);
+
+    // If Rockchip HW is selected, force RKNN backend
+    inference::Backend backend = rockchipHw
+        ? inference::Backend::RKNN
+        : dlg.getBackend();
+
     // Initialise detector
-    initializeDetector(dlg.getBackend(), modelFilePath_, yamlFilePath_,
+    initializeDetector(backend, modelFilePath_, yamlFilePath_,
                        dlg.getConfThreshold(), dlg.getNmsThreshold(),
                        dlg.getClassLabels());
 
