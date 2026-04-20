@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # ─── build options ────────────────────────────────────────────────────────────
 option(USE_QT5        "Use Qt5 instead of Qt6"              OFF)
 option(BUILD_DEMO     "Build the demo application"          ON)
-option(WITH_OPENVINO  "Enable OpenVINO inference backend"   OFF)
+option(WITH_OPENVINO  "Enable OpenVINO inference backend"   ON)
 option(WITH_RKNN      "Enable RKNN inference backend"       OFF)
 
 include(FetchContent)
@@ -132,8 +132,60 @@ message(STATUS "ONNX Runtime lib:     ${ONNXRUNTIME_LIB}")
 
 # ─── OpenVINO (optional) ─────────────────────────────────────────────────────
 if(WITH_OPENVINO)
-    find_package(OpenVINO REQUIRED COMPONENTS Runtime)
-    message(STATUS "OpenVINO found: ${OpenVINO_VERSION}")
+    include(FetchContent)
+
+    if(WITH_OPENVINO)
+        include(FetchContent)
+
+        # Determine the archive name based on your system (x86_64 for Ubuntu)
+        set(OV_VER "2026.1.0")
+        set(OV_PLATFORM "ubuntu24_x86_64") # Adjust to ubuntu22 if needed
+        set(OV_URL "https://storage.openvinotoolkit.org/repositories/openvino/packages/2026.1/linux/openvino_toolkit_ubuntu22_2026.1.0.21367.63e31528c62_x86_64.tgz")
+
+        message(STATUS "[OV] Fetching Pre-built OpenVINO ${OV_VER}...")
+
+        FetchContent_Declare(
+          openvino
+          URL ${OV_URL}
+          # This skips the entire build process and just uses the headers/libs
+        )
+
+        FetchContent_MakeAvailable(openvino)
+
+        # Manual path setup because pre-built archives don't always
+        # export the openvino::runtime target immediately in FetchContent
+        set(OpenVINO_DIR "${openvino_SOURCE_DIR}/runtime/cmake")
+        find_package(OpenVINO REQUIRED)
+
+        message(STATUS "[OV] Using Pre-built from: ${openvino_SOURCE_DIR}")
+    endif()
+    # 4. Use the 'openvino_POPULATED' variable to check status
+    FetchContent_GetProperties(openvino)
+    if(openvino_POPULATED)
+        message(STATUS "[DIAGNOSTIC] OpenVINO Source Dir: ${openvino_SOURCE_DIR}")
+        message(STATUS "[DIAGNOSTIC] OpenVINO Binary Dir: ${openvino_BINARY_DIR}")
+    endif()
+
+    # 5. Query the target directly
+    if(TARGET openvino::runtime)
+        # We use 'LOCATION' and 'INTERFACE_INCLUDE_DIRECTORIES'
+        # Note: Some properties are only available after the Generate grade,
+        # but INTERFACE_INCLUDE_DIRECTORIES should be readable now.
+        get_target_property(TEMP_OV_INC openvino::runtime INTERFACE_INCLUDE_DIRECTORIES)
+
+        message(STATUS "-------------------------------------------------------")
+        message(STATUS " [SUCCESS] OpenVINO Target Found")
+
+        # If the list is empty, CMake might be using Generator Expressions
+        if("${TEMP_OV_INC}" STREQUAL "TEMP_OV_INC-NOTFOUND" OR "${TEMP_OV_INC}" STREQUAL "")
+             message(STATUS " [OV] Include Dirs: (Internal/Generator Expression)")
+        else()
+             message(STATUS " [OV] Include Dirs: ${TEMP_OV_INC}")
+        endif()
+        message(STATUS "-------------------------------------------------------")
+    else()
+        message(FATAL_ERROR " [ERROR] OpenVINO target NOT created. Check network or GIT_TAG.")
+    endif()
 endif()
 
 # ─── RKNN (optional, cross-compile for RV1106) ───────────────────────────────
@@ -154,29 +206,36 @@ endif()
 # ─── sources ─────────────────────────────────────────────────────────────────
 set(SOURCES
     src/main.cpp
+    src/debug_log.cpp
     src/ui/mainwindow.cpp
     src/ui/videowidget.cpp
     src/ui/configdialog.cpp
+    src/ui/classlabelsdialog.cpp
     src/inference/DetectorFactory.cpp
     src/inference/OnnxDetector.cpp
     src/inference/OpenVinoDetector.cpp
     src/inference/RknnDetector.cpp
+    src/inference/edgeyolo_bridge.cpp
 )
 
 set(HEADERS
     src/ui/mainwindow.h
     src/ui/videowidget.h
     src/ui/configdialog.h
+    src/ui/classlabelsdialog.h
     src/inference/IDetector.h
     src/inference/DetectorFactory.h
     src/inference/OnnxDetector.h
     src/inference/OpenVinoDetector.h
     src/inference/RknnDetector.h
+    src/inference/edgeyolo_bridge.h
 )
 
 # ─── executable ──────────────────────────────────────────────────────────────
 if(BUILD_DEMO)
-    add_executable(edgeyolo_qt_gui ${SOURCES})
+    add_executable(edgeyolo_qt_gui ${SOURCES}
+        src/inference/edgeyolo_bridge.cpp
+        src/inference/edgeyolo_bridge.h)
 
     # Qt auto-moc + runtime search path for the fetched ONNX Runtime shared library
     set_target_properties(edgeyolo_qt_gui PROPERTIES
@@ -201,6 +260,7 @@ if(BUILD_DEMO)
             ${PROJECT_SOURCE_DIR}/../../third_party/edgeyolo/cpp/rknn/include
         )
     endif()
+
 
     # ── compile definitions ───────────────────────────────────────────────
     target_compile_definitions(edgeyolo_qt_gui PRIVATE

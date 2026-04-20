@@ -8,7 +8,10 @@
 #include <QScrollArea>
 #include <QApplication>
 #include <QDebug>
+#include <QStandardPaths>
 #include <stdexcept>
+#include <fstream>
+#include <yaml-cpp/yaml.h>
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -104,9 +107,13 @@ ConfigDialog::ConfigDialog(QWidget *parent) : QDialog(parent)
     mainLayout->addWidget(makeSeparator());
     setupV4l2Section(mainLayout);
     mainLayout->addWidget(makeSeparator());
+    setupThresholdsSection(mainLayout);
+    mainLayout->addWidget(makeSeparator());
     setupRoiSection(mainLayout);
     mainLayout->addWidget(makeSeparator());
     setupInfoSection(mainLayout);
+    mainLayout->addWidget(makeSeparator());
+    setupDebugSection(mainLayout);
     mainLayout->addStretch();
 
     scroll->setWidget(container);
@@ -120,6 +127,7 @@ ConfigDialog::ConfigDialog(QWidget *parent) : QDialog(parent)
     connect(okButton_,     &QPushButton::clicked, this, &ConfigDialog::onAccepted);
     connect(cancelButton_, &QPushButton::clicked, this, &QDialog::reject);
 
+    loadConfig();
     updateSourceVisibility();
     updateInfoPanel();
 }
@@ -197,6 +205,10 @@ void ConfigDialog::setupModelSection(QVBoxLayout* parent)
     yamlRow->addWidget(yamlFilePathEdit_, 1);
     yamlRow->addWidget(browseYamlButton_);
     form->addRow("Class config YAML:", yamlRow);
+
+    editClassLabelsBtn_ = new QPushButton("Edit Class Labels…", this);
+    connect(editClassLabelsBtn_, &QPushButton::clicked, this, &ConfigDialog::openClassLabelsEditor);
+    form->addRow("", editClassLabelsBtn_);
 
     parent->addWidget(modelGroup_);
 }
@@ -345,6 +357,32 @@ void ConfigDialog::setupV4l2Section(QVBoxLayout* parent)
     parent->addWidget(v4l2ControlsGroup_);
 }
 
+void ConfigDialog::setupThresholdsSection(QVBoxLayout* parent)
+{
+    thresholdsGroup_ = new QGroupBox("Detection Thresholds", this);
+    QFormLayout* form = new QFormLayout(thresholdsGroup_);
+
+    auto makeDoubleSpin = [&](double min, double max, double step, double defaultVal) {
+        auto* spin = new QDoubleSpinBox(this);
+        spin->setRange(min, max);
+        spin->setSingleStep(step);
+        spin->setDecimals(2);
+        spin->setValue(defaultVal);
+        spin->setFixedWidth(80);
+        return spin;
+    };
+
+    confThresSpin_ = makeDoubleSpin(0.01, 0.99, 0.05, 0.25);
+    confThresSpin_->setToolTip("Objectness × class score threshold; lower = more detections");
+    form->addRow("Confidence:", confThresSpin_);
+
+    nmsThresSpin_ = makeDoubleSpin(0.01, 0.99, 0.05, 0.45);
+    nmsThresSpin_->setToolTip("IoU threshold for NMS; lower = fewer overlapping boxes");
+    form->addRow("NMS IoU:", nmsThresSpin_);
+
+    parent->addWidget(thresholdsGroup_);
+}
+
 void ConfigDialog::setupRoiSection(QVBoxLayout* parent)
 {
     roiGroup_ = new QGroupBox("Region of Interest (ROI)", this);
@@ -376,12 +414,26 @@ void ConfigDialog::setupInfoSection(QVBoxLayout* parent)
     parent->addWidget(infoGroup_);
 }
 
+void ConfigDialog::setupDebugSection(QVBoxLayout* parent)
+{
+    debugGroup_ = new QGroupBox("Diagnostics", this);
+    QVBoxLayout* vlay = new QVBoxLayout(debugGroup_);
+
+    debugLoggingCheckbox_ = new QCheckBox("Enable debug logging (stdout/stderr)", this);
+    debugLoggingCheckbox_->setToolTip(
+        "When checked, verbose logs are printed to stdout (info) and stderr (errors).\n"
+        "Useful for diagnosing inference, FPS, ROI, and video-source issues.");
+    vlay->addWidget(debugLoggingCheckbox_);
+
+    parent->addWidget(debugGroup_);
+}
+
 void ConfigDialog::setupButtonRow(QVBoxLayout* parent)
 {
     QHBoxLayout* row = new QHBoxLayout();
     row->setContentsMargins(10, 6, 10, 10);
 
-    okButton_     = new QPushButton("OK",     this);
+    okButton_     = new QPushButton("Apply",  this);
     cancelButton_ = new QPushButton("Cancel", this);
     okButton_->setDefault(true);
 
@@ -452,9 +504,9 @@ void ConfigDialog::updateSourceVisibility()
     videoFileGroup_->setVisible(isVideoFile);
     rtspGroup_->setVisible(isRtsp);
 
-    // Resolution / FPS always visible — relevant for all sources
-    resolutionGroup_->setVisible(true);
-    fpsGroup_->setVisible(true);
+    // Resolution / FPS only relevant for camera sources (hidden for video file and RTSP)
+    resolutionGroup_->setVisible(isCamera);
+    fpsGroup_->setVisible(isCamera);
 
     // ROI always available
     roiGroup_->setVisible(true);
@@ -640,6 +692,13 @@ void ConfigDialog::browseYamlFile()
     updateInfoPanel();
 }
 
+void ConfigDialog::openClassLabelsEditor()
+{
+    ClassLabelsDialog dlg(classLabels_, yamlFilePathEdit_->text().trimmed(), this);
+    if (dlg.exec() == QDialog::Accepted)
+        classLabels_ = dlg.getClassLabels();
+}
+
 void ConfigDialog::browseVideoFile()
 {
     const QString path = QFileDialog::getOpenFileName(
@@ -800,5 +859,168 @@ void ConfigDialog::onAccepted()
         return;   // Keep dialog open
     }
 
+    saveConfig();
     accept();
+}
+
+// ─── config persistence ───────────────────────────────────────────────────────
+
+QString ConfigDialog::configFilePath()
+{
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+    QDir().mkpath(dir);
+    return dir + "/config.yaml";
+}
+
+void ConfigDialog::saveConfig()
+{
+    YAML::Node cfg;
+
+    cfg["backend"]          = backendComboBox_->currentData().toInt();
+    cfg["model_file"]       = modelFilePath_.toStdString();
+    cfg["yaml_file"]        = yamlFilePath_.toStdString();
+    cfg["source"]           = sourceButtonGroup_->checkedId();
+    cfg["camera_device_id"] = cameraDeviceId_;
+    cfg["video_file"]       = videoFilePathEdit_->text().toStdString();
+    cfg["rtsp_url"]         = rtspUrlEdit_->text().toStdString();
+    cfg["resolution_index"] = resolutionComboBox_->currentIndex();
+    cfg["fps_index"]        = fpsComboBox_->currentIndex();
+    cfg["gain"]             = gainSpinBox_->value();
+    cfg["gamma"]            = gammaSpinBox_->value();
+    cfg["brightness"]       = brightnessSpinBox_->value();
+    cfg["conf_threshold"]   = confThresSpin_->value();
+    cfg["nms_threshold"]    = nmsThresSpin_->value();
+
+    if (!classLabels_.isEmpty()) {
+        YAML::Node lblNode;
+        for (const QString& lbl : classLabels_)
+            lblNode.push_back(lbl.toStdString());
+        cfg["class_labels"] = lblNode;
+    }
+    cfg["roi_enabled"]      = enableRoiCheckbox_->isChecked();
+    cfg["debug_logging"]    = debugLoggingCheckbox_->isChecked();
+
+    if (roi_.isValid()) {
+        cfg["roi"]["x"]      = roi_.x();
+        cfg["roi"]["y"]      = roi_.y();
+        cfg["roi"]["width"]  = roi_.width();
+        cfg["roi"]["height"] = roi_.height();
+    }
+
+    const std::string path = configFilePath().toStdString();
+    std::ofstream fout(path);
+    if (!fout.is_open()) {
+        qWarning() << "ConfigDialog: cannot write config to" << configFilePath();
+        return;
+    }
+    fout << cfg;
+    qDebug() << "ConfigDialog: saved config to" << configFilePath();
+}
+
+void ConfigDialog::loadConfig()
+{
+    const std::string path = configFilePath().toStdString();
+    {
+        std::ifstream probe(path);
+        if (!probe.good()) return;  // first run
+    }
+
+    YAML::Node cfg;
+    try {
+        cfg = YAML::LoadFile(path);
+    }
+    catch (const YAML::Exception& e) {
+        qWarning() << "ConfigDialog: failed to parse config YAML:" << e.what();
+        return;
+    }
+
+    // Backend
+    if (cfg["backend"]) {
+        const int backendVal = cfg["backend"].as<int>();
+        for (int i = 0; i < backendComboBox_->count(); ++i) {
+            if (backendComboBox_->itemData(i).toInt() == backendVal) {
+                backendComboBox_->setCurrentIndex(i);
+                break;
+            }
+        }
+    }
+
+    // Model
+    if (cfg["model_file"]) {
+        modelFilePath_ = QString::fromStdString(cfg["model_file"].as<std::string>());
+        if (!modelFilePath_.isEmpty() && QFile::exists(modelFilePath_)) {
+            modelFilePathEdit_->setText(QFileInfo(modelFilePath_).fileName());
+            modelFilePathEdit_->setToolTip(modelFilePath_);
+        } else {
+            modelFilePath_.clear();
+        }
+    }
+    if (cfg["yaml_file"]) {
+        yamlFilePath_ = QString::fromStdString(cfg["yaml_file"].as<std::string>());
+        yamlFilePathEdit_->setText(yamlFilePath_);
+    }
+
+    // Source
+    if (cfg["source"]) {
+        const int srcId = cfg["source"].as<int>(0);
+        if (auto* btn = sourceButtonGroup_->button(srcId))
+            btn->setChecked(true);
+    }
+
+    // Camera
+    if (cfg["camera_device_id"]) {
+        cameraDeviceId_ = cfg["camera_device_id"].as<int>(0);
+        for (int i = 0; i < availableCameraIds_.size(); ++i) {
+            if (availableCameraIds_[i] == cameraDeviceId_) {
+                cameraComboBox_->setCurrentIndex(i);
+                break;
+            }
+        }
+    }
+
+    // Video / RTSP
+    if (cfg["video_file"])
+        videoFilePathEdit_->setText(QString::fromStdString(cfg["video_file"].as<std::string>()));
+    if (cfg["rtsp_url"])
+        rtspUrlEdit_->setText(QString::fromStdString(cfg["rtsp_url"].as<std::string>()));
+
+    // Resolution / FPS
+    if (cfg["resolution_index"])
+        resolutionComboBox_->setCurrentIndex(cfg["resolution_index"].as<int>(0));
+    if (cfg["fps_index"])
+        fpsComboBox_->setCurrentIndex(cfg["fps_index"].as<int>(2));
+
+    // V4L2 controls
+    if (cfg["gain"])       gainSpinBox_->setValue(cfg["gain"].as<int>(50));
+    if (cfg["gamma"])      gammaSpinBox_->setValue(cfg["gamma"].as<int>(100));
+    if (cfg["brightness"]) brightnessSpinBox_->setValue(cfg["brightness"].as<int>(0));
+
+    // Thresholds
+    if (cfg["conf_threshold"])
+        confThresSpin_->setValue(cfg["conf_threshold"].as<double>(0.25));
+    if (cfg["nms_threshold"])
+        nmsThresSpin_->setValue(cfg["nms_threshold"].as<double>(0.45));
+
+    // Class labels
+    if (cfg["class_labels"]) {
+        classLabels_.clear();
+        for (const auto& n : cfg["class_labels"])
+            classLabels_ << QString::fromStdString(n.as<std::string>());
+    }
+
+    // ROI
+    if (cfg["roi_enabled"])
+        enableRoiCheckbox_->setChecked(cfg["roi_enabled"].as<bool>(false));
+    if (cfg["roi"]) {
+        const YAML::Node& r = cfg["roi"];
+        roi_ = QRect(r["x"].as<int>(0), r["y"].as<int>(0),
+                     r["width"].as<int>(0), r["height"].as<int>(0));
+        if (roi_.isValid())
+            roiInfoLabel_->setText(QString("ROI: (%1,%2) %3×%4")
+                .arg(roi_.x()).arg(roi_.y()).arg(roi_.width()).arg(roi_.height()));
+    }
+
+    // Debug
+    if (cfg["debug_logging"])
+        debugLoggingCheckbox_->setChecked(cfg["debug_logging"].as<bool>(false));
 }

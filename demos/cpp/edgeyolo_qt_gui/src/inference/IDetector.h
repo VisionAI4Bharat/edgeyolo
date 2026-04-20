@@ -54,9 +54,15 @@ public:
     virtual std::vector<Detection> infer(const cv::Mat& frame) = 0;
 
     /**
-     * Class names in label order, populated after load().
+     * Class labels in index order, populated after load().
      */
     virtual const std::vector<std::string>& classNames() const = 0;
+
+    /**
+     * Override class labels after load (e.g. from user-edited config).
+     * Replaces the labels read from YAML; numClasses is updated accordingly.
+     */
+    virtual void setClassLabels(const std::vector<std::string>& labels) = 0;
 
     /**
      * Model input spatial size (width × height), populated after load().

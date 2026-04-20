@@ -7,6 +7,7 @@
 #include <yaml-cpp/yaml.h>
 #include <opencv2/core.hpp>
 
+#include <array>
 #include <memory>
 #include <string>
 #include <vector>
@@ -58,18 +59,15 @@ public:
     std::vector<Detection> infer(const cv::Mat& frame) override;
 
     const std::vector<std::string>& classNames() const override { return classNames_; }
+    void setClassLabels(const std::vector<std::string>& labels) override {
+        classNames_ = labels; numClasses_ = static_cast<int>(labels.size());
+    }
     cv::Size inputSize() const override { return inputSize_; }
     bool     isLoaded()  const override { return loaded_; }
 
 private:
     void loadYaml(const std::string& modelPath);
     void buildSession(const std::string& modelPath);
-
-    std::vector<Detection> postProcess(const float* data,
-                                       int64_t numDets,
-                                       int64_t arrayLen,
-                                       float   factor,
-                                       cv::Size oriSize) const;
 
     // ORT objects
     Ort::Env                          env_{ ORT_LOGGING_LEVEL_WARNING, "OnnxDetector" };
@@ -91,6 +89,12 @@ private:
     // Inference parameters
     float confThres_{ 0.25f };
     float nmsThres_{  0.45f };
+
+    // Pre-allocated preprocessing buffers (avoid per-frame heap allocs)
+    std::vector<float>        blob_;
+    std::vector<cv::Mat>      splitChannels_;
+    std::array<int64_t, 4>   inShape_{ 1, 3, 0, 0 };  // filled in buildSession
+    Ort::MemoryInfo           memInfo_{ Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault) };
 
     std::string yamlPath_;
     bool        loaded_{ false };

@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "../debug_log.h"
 
 #include <QDateTime>
 #include <QFileInfo>
@@ -6,6 +7,9 @@
 #include <QDebug>
 
 #include <chrono>
+
+#define MW_TAG  "MainWindow"
+#define WK_TAG  "DetWorker"
 
 // ─── DetectionWorker ──────────────────────────────────────────────────────────
 
@@ -49,7 +53,7 @@ void DetectionWorker::stop()
 
 void DetectionWorker::run()
 {
-    fpsWindowStart_ = QDateTime::currentMSecsSinceEpoch();
+    DBG_LOG(WK_TAG, "thread started\n");
 
     while (true) {
         cv::Mat frame;
@@ -67,7 +71,14 @@ void DetectionWorker::run()
             det        = detector_;
         }
 
-        if (!det || frame.empty()) continue;
+        if (!det) {
+            ERR_LOG(WK_TAG, "no detector set — dropping frame\n");
+            continue;
+        }
+        if (frame.empty()) {
+            ERR_LOG(WK_TAG, "received empty frame — dropping\n");
+            continue;
+        }
 
         // ── inference ─────────────────────────────────────────────────────
         std::vector<inference::Detection> detections;
@@ -82,24 +93,22 @@ void DetectionWorker::run()
             auto t1 = Clock::now();
 
             inferMs = std::chrono::duration<float, std::milli>(t1 - t0).count();
-            // NMS is inside infer() for all backends; we can't split it here.
-            // Report nmsMs = 0 unless a backend exposes it separately.
+            DBG_LOG(WK_TAG, "infer done: %zu detections in %.1f ms\n",
+                detections.size(), static_cast<double>(inferMs));
         }
         catch (const std::exception& e) {
-            qWarning() << "DetectionWorker: infer() threw:" << e.what();
+            ERR_LOG(WK_TAG, "infer() threw: %s\n", e.what());
             continue;
         }
 
-        // ── FPS ───────────────────────────────────────────────────────────
-        ++frameCount_;
-        const qint64 now    = QDateTime::currentMSecsSinceEpoch();
-        const qint64 elapsed = now - fpsWindowStart_;
-        float fps = 0.f;
-        if (elapsed >= 1000) {
-            fps = frameCount_ * 1000.f / static_cast<float>(elapsed);
-            frameCount_    = 0;
-            fpsWindowStart_ = now;
+        // ── FPS — EMA of instantaneous 1/latency; updates every frame ────
+        if (inferMs > 0.f) {
+            const float instantFps = 1000.f / inferMs;
+            emaFps_ = (emaFps_ == 0.f)
+                ? instantFps
+                : kFpsAlpha * instantFps + (1.f - kFpsAlpha) * emaFps_;
         }
+        const float fps = emaFps_;
 
         // ── rolling average latency ───────────────────────────────────────
         latencyHistory_.push_back(inferMs);
@@ -168,12 +177,8 @@ void MainWindow::setupUI()
     controlLayout_ = new QVBoxLayout(controlPanel_);
     controlLayout_->setSpacing(6);
 
-    configButton_  = new QPushButton("Configure…", this);
-    editRunButton_ = new QPushButton("Switch to Run Mode", this);
-    editRunButton_->setEnabled(false); // enabled after detector loaded
-
+    configButton_ = new QPushButton("Configure…", this);
     controlLayout_->addWidget(configButton_);
-    controlLayout_->addWidget(editRunButton_);
 
     // ── metrics ───────────────────────────────────────────────────────────
     metricsGroup_ = new QGroupBox("Performance Metrics", this);
@@ -208,9 +213,8 @@ void MainWindow::setupUI()
 
 void MainWindow::setupConnections()
 {
-    connect(configButton_,  &QPushButton::clicked, this, &MainWindow::openConfigDialog);
-    connect(editRunButton_, &QPushButton::clicked, this, &MainWindow::toggleEditRunMode);
-    connect(videoWidget_,   &VideoWidget::boundingBoxChanged,
+    connect(configButton_, &QPushButton::clicked, this, &MainWindow::openConfigDialog);
+    connect(videoWidget_,  &VideoWidget::boundingBoxChanged,
             this, &MainWindow::handleBoundingBoxChanged);
     connect(clockTimer_, &QTimer::timeout, this, &MainWindow::updateClock);
 }
@@ -221,6 +225,12 @@ void MainWindow::openConfigDialog()
 {
     ConfigDialog dlg(this);
     if (dlg.exec() != QDialog::Accepted) return;
+
+    // Apply debug logging flag first so subsequent calls already use it
+    debugLogging_ = dlg.isDebugLoggingEnabled();
+    Debug::setEnabled(debugLogging_);
+    DBG_LOG(MW_TAG, "config accepted — debug logging %s\n",
+        debugLogging_ ? "ON" : "OFF");
 
     // Stop any running worker before touching the detector
     stopWorker();
@@ -246,22 +256,30 @@ void MainWindow::openConfigDialog()
     }
 
     // Initialise detector
-    initializeDetector(dlg.getBackend(), modelFilePath_, yamlFilePath_, 0.25f, 0.45f);
+    initializeDetector(dlg.getBackend(), modelFilePath_, yamlFilePath_,
+                       dlg.getConfThreshold(), dlg.getNmsThreshold(),
+                       dlg.getClassLabels());
 
     // Load previously saved ROI (no-op if file absent)
     videoWidget_->loadRoiFromConfig(roiConfigPath_);
 }
 
-void MainWindow::initializeDetector(inference::Backend backend,
-                                     const QString&     modelPath,
-                                     const QString&     yamlPath,
-                                     float              confThres,
-                                     float              nmsThres)
+void MainWindow::initializeDetector(inference::Backend  backend,
+                                     const QString&      modelPath,
+                                     const QString&      yamlPath,
+                                     float               confThres,
+                                     float               nmsThres,
+                                     const QStringList&  classLabels)
 {
     if (modelPath.isEmpty()) {
         statusBar_->showMessage("No model selected.");
         return;
     }
+
+    DBG_LOG(MW_TAG, "loading model: %s  yaml: %s  conf=%.2f  nms=%.2f\n",
+        modelPath.toStdString().c_str(),
+        yamlPath.isEmpty() ? "(auto)" : yamlPath.toStdString().c_str(),
+        static_cast<double>(confThres), static_cast<double>(nmsThres));
 
     try {
         detector_ = inference::DetectorFactory::create(
@@ -273,18 +291,44 @@ void MainWindow::initializeDetector(inference::Backend backend,
         );
     }
     catch (const std::exception& e) {
+        ERR_LOG(MW_TAG, "model load failed: %s\n", e.what());
         QMessageBox::critical(this, "Model Load Failed",
             QString("Failed to load model:\n%1").arg(e.what()));
         detector_.reset();
-        editRunButton_->setEnabled(false);
         statusBar_->showMessage("Model load failed.");
+
+        // Stop the video capture thread because model failed to load
+        videoWidget_->stopCaptureThread();
+
         return;
     }
 
-    populateClassCheckboxes(detector_->classNames());
-    editRunButton_->setEnabled(true);
+    if (!classLabels.isEmpty()) {
+        std::vector<std::string> labels;
+        labels.reserve(classLabels.size());
+        for (const QString& s : classLabels)
+            labels.push_back(s.toStdString());
+        detector_->setClassLabels(labels);
+    }
+
+    DBG_LOG(MW_TAG, "model loaded OK — %zu classes  input %dx%d\n",
+        detector_->classNames().size(),
+        detector_->inputSize().width, detector_->inputSize().height);
+
+    const auto& names = detector_->classNames();
+    populateClassCheckboxes(names);
+
+    QStringList qnames;
+    qnames.reserve(static_cast<int>(names.size()));
+    for (const auto& n : names)
+        qnames.append(QString::fromStdString(n));
+    videoWidget_->setClassNames(qnames);
+
+    videoWidget_->setEditMode(false);
+    startWorker();
+
     statusBar_->showMessage(
-        QString("Model loaded (%1, %2 classes).")
+        QString("Model loaded (%1, %2 classes) — detection running.")
         .arg(inference::DetectorFactory::name(backend))
         .arg(static_cast<int>(detector_->classNames().size()))
     );
@@ -313,32 +357,17 @@ void MainWindow::populateClassCheckboxes(const std::vector<std::string>& names)
         objectsLayout_->addWidget(new QLabel("(no classes)", this));
 }
 
-// ─── mode switching ───────────────────────────────────────────────────────────
-
-void MainWindow::toggleEditRunMode()
-{
-    isEditMode_ = !isEditMode_;
-
-    if (isEditMode_) {
-        stopWorker();
-        videoWidget_->setEditMode(true);
-        editRunButton_->setText("Switch to Run Mode");
-        statusBar_->showMessage("Edit Mode — draw region of interest.");
-    } else {
-        videoWidget_->setEditMode(false);
-        editRunButton_->setText("Switch to Edit Mode");
-        statusBar_->showMessage("Run Mode — detection active.");
-        startWorker();
-    }
-}
-
 // ─── worker management ────────────────────────────────────────────────────────
 
 void MainWindow::startWorker()
 {
-    if (!detector_) return;
+    if (!detector_) {
+        ERR_LOG(MW_TAG, "startWorker called but no detector — aborting\n");
+        return;
+    }
     if (worker_) return; // already running
 
+    DBG_LOG(MW_TAG, "starting detection worker\n");
     worker_ = new DetectionWorker(this);
     worker_->setDetector(detector_.get());
 
@@ -350,14 +379,23 @@ void MainWindow::startWorker()
     worker_->setEnabled(true);
     worker_->start();
 
-    // Feed frames from VideoWidget
+    // Feed frames from VideoWidget.
+    // Qt::DirectConnection is required here: frameReady is emitted from the
+    // capture thread (QThread::create lambda), so the default auto-connection
+    // would be queued. Queued connections copy their arguments, which requires
+    // cv::Mat to be a registered Qt meta-type — it isn't — so the event would
+    // be silently dropped and pushFrame() would never be called.
+    // DirectConnection runs the lambda in the capture thread directly;
+    // pushFrame() is mutex-protected so this is thread-safe.
     connect(videoWidget_, &VideoWidget::frameReady,
-            worker_,      [this](const cv::Mat& f){ worker_->pushFrame(f); });
+            worker_,      [this](const cv::Mat& f){ worker_->pushFrame(f); },
+            Qt::DirectConnection);
 }
 
 void MainWindow::stopWorker()
 {
     if (!worker_) return;
+    DBG_LOG(MW_TAG, "stopping detection worker\n");
     worker_->stop();
     worker_->wait(3000);
     delete worker_;
@@ -373,6 +411,7 @@ void MainWindow::onDetectionResults(QVector<QRect>  boxes,
                                      QVector<int>    classIds,
                                      QVector<float>  confidences)
 {
+    DBG_LOG(MW_TAG, "onDetectionResults: %lld raw boxes\n", static_cast<long long>(boxes.size()));
     // Filter by unchecked classes
     QVector<QRect>  filteredBoxes;
     QVector<int>    filteredIds;

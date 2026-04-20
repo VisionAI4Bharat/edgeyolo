@@ -80,9 +80,9 @@ private:
     static constexpr int kHistorySize = 30;
     std::deque<float> latencyHistory_;
 
-    // FPS tracking
-    int     frameCount_   = 0;
-    qint64  fpsWindowStart_ = 0;
+    // FPS tracking — rolling EMA over inference latency for smooth display
+    float   emaFps_        = 0.f;
+    static constexpr float kFpsAlpha = 0.2f;  // EMA smoothing factor
 };
 
 // ─── MainWindow ───────────────────────────────────────────────────────────────
@@ -95,7 +95,6 @@ public:
 
 private slots:
     void openConfigDialog();
-    void toggleEditRunMode();
     void onDetectionResults(QVector<QRect>  boxes,
                             QVector<int>    classIds,
                             QVector<float>  confidences);
@@ -109,11 +108,12 @@ private slots:
 private:
     void setupUI();
     void setupConnections();
-    void initializeDetector(inference::Backend backend,
-                            const QString&     modelPath,
-                            const QString&     yamlPath,
-                            float              confThres,
-                            float              nmsThres);
+    void initializeDetector(inference::Backend  backend,
+                            const QString&      modelPath,
+                            const QString&      yamlPath,
+                            float               confThres,
+                            float               nmsThres,
+                            const QStringList&  classLabels = {});
     void populateClassCheckboxes(const std::vector<std::string>& names);
     void startWorker();
     void stopWorker();
@@ -125,7 +125,6 @@ private:
     QVBoxLayout*  controlLayout_  = nullptr;
 
     QPushButton*  configButton_   = nullptr;
-    QPushButton*  editRunButton_  = nullptr;
 
     QGroupBox*    metricsGroup_   = nullptr;
     QLabel*       fpsLabel_       = nullptr;
@@ -144,9 +143,9 @@ private:
     QString  modelFilePath_;
     QString  yamlFilePath_;
     QString  roiConfigPath_;   // YAML file where ROI is persisted
-    bool     isEditMode_       = false;
-    bool     isUsingVideoFile_ = false;
+    bool     isUsingVideoFile_  = false;
     bool     isUsingRtspStream_ = false;
+    bool     debugLogging_      = false;
     QRect    currentBoundingBox_;
 
     // ── detection ─────────────────────────────────────────────────────────

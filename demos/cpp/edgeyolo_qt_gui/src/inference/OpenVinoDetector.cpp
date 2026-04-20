@@ -4,7 +4,7 @@
 
 #include <opencv2/imgproc.hpp>
 
-#include "../../../../../third_party/edgeyolo/deployment/yolo/common.hpp"
+#include "edgeyolo_bridge.h"
 
 #include <filesystem>
 #include <stdexcept>
@@ -23,9 +23,9 @@ std::vector<float> mat2blob(const cv::Mat& letterboxed, int H, int W)
     for (int r = 0; r < H; ++r) {
         const uchar* row = letterboxed.ptr<uchar>(r);
         for (int c = 0; c < W; ++c) {
-            blob[0 * plane + r * W + c] = row[c * 3 + 0] / 255.0f;
-            blob[1 * plane + r * W + c] = row[c * 3 + 1] / 255.0f;
-            blob[2 * plane + r * W + c] = row[c * 3 + 2] / 255.0f;
+            blob[0 * plane + r * W + c] = static_cast<float>(row[c * 3 + 2]); // R
+            blob[1 * plane + r * W + c] = static_cast<float>(row[c * 3 + 1]); // G
+            blob[2 * plane + r * W + c] = static_cast<float>(row[c * 3 + 0]); // B
         }
     }
     return blob;
@@ -49,7 +49,7 @@ void OpenVinoDetector::load(const std::string& modelPath, float confThres, float
     loadYaml(modelPath);
 
     try {
-        compiledModel_ = core_.compile_model(modelPath, "CPU");
+        compiledModel_ = core_.compile_model(modelPath, "AUTO");
         inferRequest_  = compiledModel_.create_infer_request();
     }
     catch (const ov::Exception& e) {
@@ -100,14 +100,16 @@ void OpenVinoDetector::loadYaml(const std::string& modelPath)
 
     try {
         YAML::Node cfg = YAML::LoadFile(yamlPath);
-        if (!cfg["names"])
-            throw std::runtime_error("OpenVinoDetector: YAML missing 'names': " + yamlPath);
+        YAML::Node labelsNode;
+        if (cfg["class_labels"])      labelsNode = cfg["class_labels"];
+        else if (cfg["names"])        labelsNode = cfg["names"];
+        else throw std::runtime_error("OpenVinoDetector: YAML missing 'class_labels' key: " + yamlPath);
 
-        classNames_ = cfg["names"].as<std::vector<std::string>>();
+        classNames_ = labelsNode.as<std::vector<std::string>>();
         numClasses_ = static_cast<int>(classNames_.size());
 
         if (numClasses_ == 0)
-            throw std::runtime_error("OpenVinoDetector: 'names' list is empty in: " + yamlPath);
+            throw std::runtime_error("OpenVinoDetector: 'class_labels' list is empty in: " + yamlPath);
 
         if (cfg["img_size"]) {
             auto sz = cfg["img_size"].as<std::vector<int>>();

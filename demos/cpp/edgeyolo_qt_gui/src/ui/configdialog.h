@@ -15,14 +15,17 @@
 #include <QTextBrowser>
 #include <QSlider>
 #include <QSpinBox>
+#include <QDoubleSpinBox>
 #include <QCheckBox>
 #include <QFileDialog>
 #include <QFrame>
 #include <QScrollArea>
 #include <QMessageBox>
+#include <QSettings>
 #include <QStandardItemModel>
 
 #include "inference/DetectorFactory.h"
+#include "classlabelsdialog.h"
 
 class ConfigDialog : public QDialog {
     Q_OBJECT
@@ -46,10 +49,15 @@ public:
     int     getBrightness() const { return brightnessSpinBox_->value(); }
     QRect   getRoi() const        { return roi_; }
     bool    isRoiEnabled() const  { return enableRoiCheckbox_->isChecked(); }
+    bool    isDebugLoggingEnabled() const { return debugLoggingCheckbox_ && debugLoggingCheckbox_->isChecked(); }
+    float        getConfThreshold() const { return confThresSpin_ ? static_cast<float>(confThresSpin_->value()) : 0.25f; }
+    float        getNmsThreshold()  const { return nmsThresSpin_  ? static_cast<float>(nmsThresSpin_->value())  : 0.45f; }
+    QStringList  getClassLabels()   const { return classLabels_; }
 
 private slots:
     void browseModelFile();
     void browseYamlFile();
+    void openClassLabelsEditor();
     void browseVideoFile();
     void onSourceChanged();
     void refreshCameras();
@@ -76,6 +84,8 @@ private:
     void setupFpsSection(QVBoxLayout* parent);
     void setupRoiSection(QVBoxLayout* parent);
     void setupInfoSection(QVBoxLayout* parent);
+    void setupThresholdsSection(QVBoxLayout* parent);
+    void setupDebugSection(QVBoxLayout* parent);
     void setupButtonRow(QVBoxLayout* parent);
 
     static QWidget* makeSeparator();
@@ -85,6 +95,9 @@ private:
     void updateSourceVisibility();
     void updateInfoPanel();
     bool validateInputs(QString& errorMsg) const;
+    void loadConfig();
+    void saveConfig();
+    static QString configFilePath();
 
     // — Backend section —
     QGroupBox* backendGroup_          = nullptr;
@@ -96,6 +109,7 @@ private:
     QPushButton* browseModelButton_   = nullptr;
     QLineEdit*   yamlFilePathEdit_    = nullptr;
     QPushButton* browseYamlButton_    = nullptr;
+    QPushButton* editClassLabelsBtn_  = nullptr;
 
     // — Source selection —
     QGroupBox*    sourceGroup_        = nullptr;
@@ -146,15 +160,25 @@ private:
     QGroupBox*    infoGroup_          = nullptr;
     QTextBrowser* infoTextBrowser_    = nullptr;
 
+    // — Thresholds —
+    QGroupBox*       thresholdsGroup_    = nullptr;
+    QDoubleSpinBox*  confThresSpin_      = nullptr;
+    QDoubleSpinBox*  nmsThresSpin_       = nullptr;
+
+    // — Debug —
+    QGroupBox*  debugGroup_           = nullptr;
+    QCheckBox*  debugLoggingCheckbox_ = nullptr;
+
     // — Dialog buttons —
     QPushButton* okButton_            = nullptr;
     QPushButton* cancelButton_        = nullptr;
 
     // — State —
-    QString modelFilePath_;
-    QString yamlFilePath_;
-    int     cameraDeviceId_ = 0;
-    QRect   roi_;
+    QString     modelFilePath_;
+    QString     yamlFilePath_;
+    QStringList classLabels_;
+    int         cameraDeviceId_ = 0;
+    QRect       roi_;
 
     // Camera device indices matching combo items
     QVector<int> availableCameraIds_;

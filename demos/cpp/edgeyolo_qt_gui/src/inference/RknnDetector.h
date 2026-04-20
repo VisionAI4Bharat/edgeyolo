@@ -47,6 +47,9 @@ public:
     std::vector<Detection> infer(const cv::Mat& frame) override;
 
     const std::vector<std::string>& classNames() const override { return classNames_; }
+    void setClassLabels(const std::vector<std::string>& labels) override {
+        classNames_ = labels;
+    }
     cv::Size inputSize() const override { return inputSize_; }
     bool     isLoaded()  const override { return loaded_; }
 

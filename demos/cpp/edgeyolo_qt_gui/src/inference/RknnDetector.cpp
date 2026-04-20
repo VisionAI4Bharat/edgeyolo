@@ -36,12 +36,14 @@ void RknnDetector::load(const std::string& modelPath, float confThres, float nms
     try {
         YAML::Node cfg = YAML::LoadFile(yamlPath);
 
-        if (!cfg["names"])
-            throw std::runtime_error("RknnDetector: YAML missing 'names': " + yamlPath);
-        classNames_ = cfg["names"].as<std::vector<std::string>>();
+        YAML::Node labelsNode;
+        if (cfg["class_labels"])      labelsNode = cfg["class_labels"];
+        else if (cfg["names"])        labelsNode = cfg["names"];
+        else throw std::runtime_error("RknnDetector: YAML missing 'class_labels' key: " + yamlPath);
+        classNames_ = labelsNode.as<std::vector<std::string>>();
 
         if (classNames_.empty())
-            throw std::runtime_error("RknnDetector: 'names' list is empty in: " + yamlPath);
+            throw std::runtime_error("RknnDetector: 'class_labels' list is empty in: " + yamlPath);
 
         if (cfg["img_size"]) {
             auto sz = cfg["img_size"].as<std::vector<int>>();
