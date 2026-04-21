@@ -1,0 +1,45 @@
+# EdgeYOLO class configuration — person + forklift detection
+#
+# Usage
+# -----
+# Place this file next to your .onnx model with the same base name, e.g.:
+#   person_forklift.onnx  <-- model
+#   person_forklift.yaml  <-- this file (rename accordingly)
+#
+# Or select it explicitly in the "Class config YAML" field of the
+# Configure dialog (Browse…).
+#
+# Required keys
+# -------------
+# names   – ordered list of class labels matching the model's output head.
+#           Index 0 → first class score (det[5]), index 1 → det[6], etc.
+#           The number of entries MUST equal (output_last_dim − 5).
+#
+# Optional keys
+# -------------
+# img_size – [H, W] input resolution fed to the model.
+#            If omitted the shape is read from the ONNX graph.
+#            Set explicitly when the model was exported with a dynamic batch
+#            dimension and the graph shape shows −1.
+
+# ── Class labels ─────────────────────────────────────────────────────────────
+names:
+  - person
+  - forklift
+
+# ── Input resolution (optional override) ─────────────────────────────────────
+# Uncomment and adjust if the ONNX graph reports dynamic/unknown spatial dims.
+# img_size: [416, 416]   # [height, width]
+
+# ── Notes ─────────────────────────────────────────────────────────────────────
+# ROI (region of interest) is stored in a separate file auto-named
+#   <model_basename>_roi.yaml
+# and is written/read automatically when you draw a region in Edit Mode.
+# You do NOT need to add roi: here unless you want to pre-seed one.
+#
+# Example pre-seeded ROI (pixel coordinates in the capture frame):
+# roi:
+#   x: 100
+#   y: 80
+#   width: 1080
+#   height: 720

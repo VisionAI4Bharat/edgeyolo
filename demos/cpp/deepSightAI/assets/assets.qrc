@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/assets">
+        <file alias="logo.png">../../../../assets/swatah_logo224.png</file>
+    </qresource>
+</RCC>
