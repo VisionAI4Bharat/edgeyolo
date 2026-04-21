@@ -119,7 +119,7 @@ static LBInfo letterbox(const cv::Mat& src, cv::Mat& dst, int W, int H)
     cv::Mat resized;
     cv::resize(src, resized, {nw, nh}, 0, 0, cv::INTER_LINEAR);
 
-    dst.dsai_create(H, W, CV_8UC3);
+    dst.create(H, W, CV_8UC3);
     dst.setTo(cv::Scalar(114, 114, 114));   // grey padding (RKNN export default)
     resized.copyTo(dst(cv::Rect(pl, pt, nw, nh)));
 

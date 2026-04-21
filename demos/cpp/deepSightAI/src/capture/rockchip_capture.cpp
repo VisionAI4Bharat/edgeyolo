@@ -273,8 +273,8 @@ bool RockchipCapture::dsai_openCamera(const CameraConfig& cfg) {
     // Desktop / development fallback: V4L2 via OpenCV
     pImpl_->setError("Built without WITH_RKNN — using cv::VideoCapture fallback");
     pImpl_->cvCap.open(cfg.devId, cv::CAP_V4L2);
-    if (!pImpl_->cvCap.dsai_isOpened()) pImpl_->cvCap.open(cfg.devId);
-    if (!pImpl_->cvCap.dsai_isOpened()) {
+    if (!pImpl_->cvCap.isOpened()) pImpl_->cvCap.open(cfg.devId);
+    if (!pImpl_->cvCap.isOpened()) {
         pImpl_->setError("cv::VideoCapture could not open device " +
                           std::to_string(cfg.devId));
         return false;
@@ -301,7 +301,7 @@ bool RockchipCapture::dsai_openRtsp(const RtspConfig& cfg) {
 
 #ifdef HAVE_OPENCV_VIDEOIO
     pImpl_->cvCap.open(cfg.url, cv::CAP_FFMPEG);
-    if (!pImpl_->cvCap.dsai_isOpened()) {
+    if (!pImpl_->cvCap.isOpened()) {
         pImpl_->setError("Failed to open RTSP stream: " + cfg.url);
         return false;
     }
@@ -329,7 +329,7 @@ bool RockchipCapture::dsai_read(cv::Mat& bgrFrame) {
 #endif
 
 #ifdef HAVE_OPENCV_VIDEOIO
-    return pImpl_->cvCap.dsai_read(bgrFrame);
+    return pImpl_->cvCap.read(bgrFrame);
 #else
     return false;
 #endif
@@ -343,7 +343,7 @@ void RockchipCapture::dsai_release() {
 #endif
 
 #ifdef HAVE_OPENCV_VIDEOIO
-    if (pImpl_->cvCap.dsai_isOpened()) pImpl_->cvCap.dsai_release();
+    if (pImpl_->cvCap.isOpened()) pImpl_->cvCap.release();
 #endif
     pImpl_->isOpen = false;
 }

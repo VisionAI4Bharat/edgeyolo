@@ -235,10 +235,10 @@ void MainWindow::dsai_setupUI()
 
 void MainWindow::dsai_setupConnections()
 {
-    connect(configButton_, &QPushButton::clicked, this, &MainWindow::openConfigDialog);
+    connect(configButton_, &QPushButton::clicked, this, &MainWindow::dsai_openConfigDialog);
     connect(videoWidget_,  &VideoWidget::boundingBoxChanged,
-            this, &MainWindow::handleBoundingBoxChanged);
-    connect(clockTimer_, &QTimer::timeout, this, &MainWindow::updateClock);
+            this, &MainWindow::dsai_handleBoundingBoxChanged);
+    connect(clockTimer_, &QTimer::timeout, this, &MainWindow::dsai_updateClock);
 }
 
 // ─── config ───────────────────────────────────────────────────────────────────
@@ -257,7 +257,7 @@ void MainWindow::dsai_loadFromConfigFile(const QString& configPath)
     dsai_stopWorker();
 
     debugLogging_ = cfg.debugLogging;
-    Debug::setEnabled(debugLogging_);
+    Debug::dsai_setEnabled(debugLogging_);
 
     modelFilePath_ = QString::fromStdString(cfg.modelFile);
     yamlFilePath_  = QString::fromStdString(cfg.yamlFile);
@@ -308,7 +308,7 @@ void MainWindow::dsai_openConfigDialog()
 
     // Apply debug logging flag first so subsequent calls already use it
     debugLogging_ = dlg.dsai_isDebugLoggingEnabled();
-    Debug::setEnabled(debugLogging_);
+    Debug::dsai_setEnabled(debugLogging_);
     DBG_LOG(MW_TAG, "config accepted — debug logging %s\n",
         debugLogging_ ? "ON" : "OFF");
 
@@ -460,11 +460,11 @@ void MainWindow::dsai_startWorker()
     worker_->dsai_setDetector(detector_.get());
 
     connect(worker_, &DetectionWorker::detectionResultsReady,
-            this,    &MainWindow::onDetectionResults);
+            this,    &MainWindow::dsai_onDetectionResults);
     connect(worker_, &DetectionWorker::performanceMetricsUpdated,
-            this,    &MainWindow::onPerformanceMetrics);
+            this,    &MainWindow::dsai_onPerformanceMetrics);
 
-    worker_->setEnabled(true);
+    worker_->dsai_setEnabled(true);
     worker_->start();
 
     // Feed frames from VideoWidget.
@@ -484,7 +484,7 @@ void MainWindow::dsai_stopWorker()
 {
     if (!worker_) return;
     DBG_LOG(MW_TAG, "stopping detection worker\n");
-    worker_->stop();
+    worker_->dsai_stop();
     worker_->wait(3000);
     delete worker_;
     worker_ = nullptr;

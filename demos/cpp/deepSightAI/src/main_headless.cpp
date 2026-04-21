@@ -34,7 +34,7 @@ static HeadlessApp* g_app = nullptr;
 
 static void onSignal(int sig) {
     fprintf(stderr, "\n[main] Signal %d — stopping.\n", sig);
-    if (g_app) g_app->stop();
+    if (g_app) g_app->dsai_stop();
 }
 
 // Resolve the absolute path of the running executable via /proc/self/exe.
@@ -89,14 +89,14 @@ int main(int argc, char* argv[]) {
         g_app = &app;
 
         WebConfigServer web(app);
-        if (!web.start()) {
+        if (!web.dsai_start()) {
             fprintf(stderr,
                 "[main] Web server could not bind port %d — continuing without it.\n",
                 app.dsai_config().webPort);
         }
 
         const int code = app.run();
-        web.stop();
+        web.dsai_stop();
         g_app = nullptr;
 
         if (code != 1) break;  // 0 = clean stop via signal

@@ -115,7 +115,7 @@ std::unique_ptr<IDetector> DetectorFactory::dsai_create(Backend            backe
     }
 
     // dsai_load() throws std::runtime_error on failure — propagate directly to caller.
-    detector->load(modelPath, confThres, nmsThres);
+    detector->dsai_load(modelPath, confThres, nmsThres);
 
     return detector;
 }

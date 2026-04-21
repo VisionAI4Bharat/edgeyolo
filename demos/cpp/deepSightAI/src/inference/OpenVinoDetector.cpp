@@ -177,7 +177,7 @@ std::vector<Detection> OpenVinoDetector::dsai_infer(const cv::Mat& frame)
     inferRequest_.set_input_tensor(inputTensor);
 
     try {
-        inferRequest_.dsai_infer();
+        inferRequest_.infer();
     }
     catch (const ov::Exception& e) {
         throw std::runtime_error(

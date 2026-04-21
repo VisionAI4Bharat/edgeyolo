@@ -88,14 +88,14 @@ ClassLabelsDialog::ClassLabelsDialog(const QStringList& labels,
     main->addWidget(group, 1);
     main->addLayout(bottom);
 
-    connect(addBtn_,      &QPushButton::clicked, this, &ClassLabelsDialog::addLabel);
-    connect(deleteBtn_,   &QPushButton::clicked, this, &ClassLabelsDialog::deleteLabel);
-    connect(moveUpBtn_,   &QPushButton::clicked, this, &ClassLabelsDialog::moveUp);
-    connect(moveDownBtn_, &QPushButton::clicked, this, &ClassLabelsDialog::moveDown);
-    connect(readYamlBtn_, &QPushButton::clicked, this, &ClassLabelsDialog::readFromYaml);
+    connect(addBtn_,      &QPushButton::clicked, this, &ClassLabelsDialog::dsai_addLabel);
+    connect(deleteBtn_,   &QPushButton::clicked, this, &ClassLabelsDialog::dsai_deleteLabel);
+    connect(moveUpBtn_,   &QPushButton::clicked, this, &ClassLabelsDialog::dsai_moveUp);
+    connect(moveDownBtn_, &QPushButton::clicked, this, &ClassLabelsDialog::dsai_moveDown);
+    connect(readYamlBtn_, &QPushButton::clicked, this, &ClassLabelsDialog::dsai_readFromYaml);
     connect(applyBtn,     &QPushButton::clicked, this, &QDialog::accept);
     connect(cancelBtn,    &QPushButton::clicked, this, &QDialog::reject);
-    connect(list_, &QListWidget::currentRowChanged, this, &ClassLabelsDialog::updateButtonStates);
+    connect(list_, &QListWidget::currentRowChanged, this, &ClassLabelsDialog::dsai_updateButtonStates);
 
     dsai_updateButtonStates();
 }

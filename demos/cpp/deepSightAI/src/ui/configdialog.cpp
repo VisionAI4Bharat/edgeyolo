@@ -146,7 +146,7 @@ ConfigDialog::ConfigDialog(QWidget *parent) : QDialog(parent)
     dsai_setupButtonRow(dialogLayout);
 
     // Wire up OK / Cancel
-    connect(okButton_,     &QPushButton::clicked, this, &ConfigDialog::onAccepted);
+    connect(okButton_,     &QPushButton::clicked, this, &ConfigDialog::dsai_onAccepted);
     connect(cancelButton_, &QPushButton::clicked, this, &QDialog::reject);
 
     dsai_loadConfig();
@@ -220,7 +220,7 @@ void ConfigDialog::dsai_setupModelSection(QVBoxLayout* parent)
             modelFilePathEdit_->setPlaceholderText("Select ONNX model (.onnx)…");
     });
     browseModelButton_ = new QPushButton("Browse…", this);
-    connect(browseModelButton_, &QPushButton::clicked, this, &ConfigDialog::browseModelFile);
+    connect(browseModelButton_, &QPushButton::clicked, this, &ConfigDialog::dsai_browseModelFile);
 
     QHBoxLayout* modelRow = new QHBoxLayout();
     modelRow->addWidget(modelFilePathEdit_, 1);
@@ -231,7 +231,7 @@ void ConfigDialog::dsai_setupModelSection(QVBoxLayout* parent)
     yamlFilePathEdit_ = new QLineEdit(this);
     yamlFilePathEdit_->setPlaceholderText("Optional — auto-detected if empty");
     browseYamlButton_ = new QPushButton("Browse…", this);
-    connect(browseYamlButton_, &QPushButton::clicked, this, &ConfigDialog::browseYamlFile);
+    connect(browseYamlButton_, &QPushButton::clicked, this, &ConfigDialog::dsai_browseYamlFile);
 
     QHBoxLayout* yamlRow = new QHBoxLayout();
     yamlRow->addWidget(yamlFilePathEdit_, 1);
@@ -239,7 +239,7 @@ void ConfigDialog::dsai_setupModelSection(QVBoxLayout* parent)
     form->addRow("Class config YAML:", yamlRow);
 
     editClassLabelsBtn_ = new QPushButton("Edit Class Labels…", this);
-    connect(editClassLabelsBtn_, &QPushButton::clicked, this, &ConfigDialog::openClassLabelsEditor);
+    connect(editClassLabelsBtn_, &QPushButton::clicked, this, &ConfigDialog::dsai_openClassLabelsEditor);
     form->addRow("", editClassLabelsBtn_);
 
     parent->addWidget(modelGroup_);
@@ -279,7 +279,7 @@ void ConfigDialog::dsai_setupCameraSection(QVBoxLayout* parent)
     cameraComboBox_       = new QComboBox(this);
     refreshCamerasButton_ = new QPushButton("Refresh", this);
 
-    connect(refreshCamerasButton_, &QPushButton::clicked, this, &ConfigDialog::refreshCameras);
+    connect(refreshCamerasButton_, &QPushButton::clicked, this, &ConfigDialog::dsai_refreshCameras);
 
     QHBoxLayout* lay = new QHBoxLayout();
     lay->addWidget(cameraComboBox_, 1);
@@ -300,7 +300,7 @@ void ConfigDialog::dsai_setupVideoFileSection(QVBoxLayout* parent)
     videoFilePathEdit_->setPlaceholderText("Path to .mp4, .avi, .mkv…");
     browseVideoButton_ = new QPushButton("Browse…", this);
 
-    connect(browseVideoButton_, &QPushButton::clicked, this, &ConfigDialog::browseVideoFile);
+    connect(browseVideoButton_, &QPushButton::clicked, this, &ConfigDialog::dsai_browseVideoFile);
 
     lay->addWidget(videoFilePathEdit_, 1);
     lay->addWidget(browseVideoButton_);
@@ -343,7 +343,7 @@ void ConfigDialog::dsai_setupResolutionSection(QVBoxLayout* parent)
     resolutionComboBox_->setCurrentIndex(0);
 
     connect(resolutionComboBox_, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &ConfigDialog::onResolutionChanged);
+            this, &ConfigDialog::dsai_onResolutionChanged);
 
     lay->addWidget(resolutionComboBox_);
     lay->addStretch();
@@ -385,18 +385,18 @@ void ConfigDialog::dsai_setupV4l2Section(QVBoxLayout* parent)
     makeRow("Brightness:", brightnessSlider_, brightnessSpinBox_, -64, 64, 0);
 
     // Slider ↔ spin synchronisation
-    connect(gainSlider_,       &QSlider::valueChanged, this, &ConfigDialog::onGainSliderChanged);
+    connect(gainSlider_,       &QSlider::valueChanged, this, &ConfigDialog::dsai_onGainSliderChanged);
     connect(gainSpinBox_,      QOverload<int>::of(&QSpinBox::valueChanged),
-            this, &ConfigDialog::onGainSpinChanged);
-    connect(gammaSlider_,      &QSlider::valueChanged, this, &ConfigDialog::onGammaSliderChanged);
+            this, &ConfigDialog::dsai_onGainSpinChanged);
+    connect(gammaSlider_,      &QSlider::valueChanged, this, &ConfigDialog::dsai_onGammaSliderChanged);
     connect(gammaSpinBox_,     QOverload<int>::of(&QSpinBox::valueChanged),
-            this, &ConfigDialog::onGammaSpinChanged);
-    connect(brightnessSlider_, &QSlider::valueChanged, this, &ConfigDialog::onBrightnessSliderChanged);
+            this, &ConfigDialog::dsai_onGammaSpinChanged);
+    connect(brightnessSlider_, &QSlider::valueChanged, this, &ConfigDialog::dsai_onBrightnessSliderChanged);
     connect(brightnessSpinBox_,QOverload<int>::of(&QSpinBox::valueChanged),
-            this, &ConfigDialog::onBrightnessSpinChanged);
+            this, &ConfigDialog::dsai_onBrightnessSpinChanged);
 
     applyV4l2Button_ = new QPushButton("Apply to Device", this);
-    connect(applyV4l2Button_, &QPushButton::clicked, this, &ConfigDialog::applyV4l2Settings);
+    connect(applyV4l2Button_, &QPushButton::clicked, this, &ConfigDialog::dsai_applyV4l2Settings);
     form->addRow("", applyV4l2Button_);
 
     parent->addWidget(v4l2ControlsGroup_);
@@ -438,7 +438,7 @@ void ConfigDialog::dsai_setupRoiSection(QVBoxLayout* parent)
     roiInfoLabel_->setWordWrap(true);
     clearRoiButton_    = new QPushButton("Clear ROI", this);
 
-    connect(clearRoiButton_, &QPushButton::clicked, this, &ConfigDialog::clearRoi);
+    connect(clearRoiButton_, &QPushButton::clicked, this, &ConfigDialog::dsai_clearRoi);
 
     vlay->addWidget(enableRoiCheckbox_);
     vlay->addWidget(roiInfoLabel_);
@@ -938,7 +938,7 @@ void ConfigDialog::dsai_saveConfig()
 {
     AppConfig cfg;
 
-    cfg.backend          = dsai_getBackend();
+    cfg.backend          = static_cast<Backend>(dsai_getBackend());
     cfg.modelFile        = modelFilePath_.toStdString();
     cfg.yamlFile         = yamlFilePath_.toStdString();
     cfg.source           = static_cast<SourceType>(sourceButtonGroup_->checkedId());
@@ -967,7 +967,7 @@ void ConfigDialog::dsai_saveConfig()
     }
 
     try {
-        cfg.saveToFile(dsai_configFilePath().toStdString());
+        cfg.dsai_saveToFile(dsai_configFilePath().toStdString());
         qDebug() << "ConfigDialog: saved config to" << dsai_configFilePath();
     } catch (const std::exception& e) {
         qWarning() << "ConfigDialog: failed to save config:" << e.what();

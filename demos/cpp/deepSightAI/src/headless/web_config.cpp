@@ -535,7 +535,7 @@ std::string WebConfigServer::dsai_jsonConfigResp() {
 // Restart must be triggered separately via POST /api/restart.
 
 static void dsai_saveConfig(HeadlessApp& app) {
-    try { app.dsai_config().saveToFile(app.configPath()); }
+    try { app.dsai_config().dsai_saveToFile(app.configPath()); }
     catch (const std::exception& e) {
         fprintf(stderr, "[WebServer] config save: %s\n", e.what());
     }

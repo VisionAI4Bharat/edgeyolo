@@ -35,7 +35,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 HeadlessApp::HeadlessApp(const std::string& configPath)
-    : configPath_(configPath.empty() ? AppConfig::defaultPath() : configPath)
+    : configPath_(configPath.empty() ? AppConfig::dsai_defaultPath() : configPath)
 {
     try {
         cfg_ = AppConfig::dsai_loadFromFile(configPath_);
@@ -51,7 +51,7 @@ void HeadlessApp::dsai_requestRestart() { restart_ = true; running_ = false; }
 
 void HeadlessApp::dsai_applyAndRestart(const AppConfig& newCfg) {
     cfg_ = newCfg;
-    try { cfg_.saveToFile(configPath_); }
+    try { cfg_.dsai_saveToFile(configPath_); }
     catch (const std::exception& e) {
         fprintf(stderr, "[HeadlessApp] Config save failed: %s\n", e.what());
     }
@@ -87,9 +87,9 @@ void HeadlessApp::dsai_runInferenceLoop() {
     if (!opened) {
         deepSightAI::RockchipCapture::CameraConfig cc;
         cc.devId  = cfg_.cameraDeviceId;
-        cc.width  = cfg_.width();
-        cc.height = cfg_.height();
-        cc.fps    = static_cast<double>(cfg_ .fps());
+        cc.width  = cfg_.dsai_width();
+        cc.height = cfg_.dsai_height();
+        cc.fps    = static_cast<double>(cfg_.dsai_fps());
         cc.iqDir  = cfg_.iqDir;
         opened = cap.dsai_openCamera(cc);
         if (!opened) {
@@ -150,7 +150,7 @@ void HeadlessApp::dsai_runInferenceLoop() {
             break;
         }
 
-        cv::Mat roi = dsai_applyRoi(frame);
+        cv::Mat roi = applyRoi(frame);
 
         std::vector<inference::Detection> detections;
         try {

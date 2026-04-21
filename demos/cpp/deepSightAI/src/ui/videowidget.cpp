@@ -38,7 +38,7 @@
 // Component tag used with the shared DBG_LOG / ERR_LOG macros.
 #define VW_TAG "VideoWidget"
 
-void VideoWidget::dsai_setDebugLogging(bool enabled) { Debug::setEnabled(enabled); }
+void VideoWidget::dsai_setDebugLogging(bool enabled) { Debug::dsai_setEnabled(enabled); }
 
 VideoWidget::VideoWidget(QWidget *parent) : QWidget(parent),
     running_(false),
@@ -408,13 +408,13 @@ void VideoWidget::dsai_startCaptureThread() {
 #ifdef HAVE_OPENCV_VIDEOIO
         if (vsPath.isEmpty()) {
             capture_.open(camId, cv::CAP_V4L2);
-            if (!capture_.dsai_isOpened())
+            if (!capture_.isOpened())
                 capture_.open(camId);
         } else {
             capture_.open(vsPath.toStdString());
         }
 
-        if (!capture_.dsai_isOpened()) {
+        if (!capture_.isOpened()) {
             ERR_LOG(VW_TAG, "failed to open source: %s\n",
                 vsPath.isEmpty()
                     ? QString("camera %1").arg(camId).toStdString().c_str()
@@ -450,7 +450,7 @@ void VideoWidget::dsai_startCaptureThread() {
             const auto frameStart = Clock::now();
 
             cv::Mat frame;
-            if (!capture_.dsai_read(frame) || frame.empty()) {
+            if (!capture_.read(frame) || frame.empty()) {
                 if (!vsPath.isEmpty()) {
                     DBG_LOG(VW_TAG, "end of file, looping back (frame %llu)\n",
                         static_cast<unsigned long long>(frameN));
@@ -481,7 +481,7 @@ void VideoWidget::dsai_startCaptureThread() {
                 QThread::msleep(static_cast<unsigned long>(sleepMs));
         }
 
-        capture_.dsai_release();
+        capture_.release();
         DBG_LOG(VW_TAG, "capture thread exited after %llu frames\n",
             static_cast<unsigned long long>(frameN));
 #else

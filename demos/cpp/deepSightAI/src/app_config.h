@@ -74,8 +74,8 @@ struct AppConfig {
     bool        debugLogging    = false;
 
     // ── helpers ────────────────────────────────────────────────────────────
-    int.width()  const;
-    int.height() const;
+    int dsai_width()  const;
+    int dsai_height() const;
     int  dsai_fps()    const;
 
     // Load from / save to a YAML file. Throws std::runtime_error on failure.
