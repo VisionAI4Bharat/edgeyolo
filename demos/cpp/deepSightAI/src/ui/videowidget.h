@@ -46,12 +46,12 @@ public:
     explicit VideoWidget(QWidget *parent = nullptr);
     ~VideoWidget();
 
-    void setCameraDevice(int deviceId);
-    void setVideoSource(const QString& path);  // video file or RTSP URL
-    void setEditMode(bool editMode);
-    void setBoundingBox(const QRect& box);
-    QRect getBoundingBox() const;
-    void setDetectionResults(const QVector<QRect>& boxes,
+    void dsai_setCameraDevice(int deviceId);
+    void dsai_setVideoSource(const QString& path);  // video file or RTSP URL
+    void dsai_setEditMode(bool editMode);
+    void dsai_setBoundingBox(const QRect& box);
+    QRect dsai_getBoundingBox() const;
+    void dsai_setDetectionResults(const QVector<QRect>& boxes,
                             const QVector<int>& classIds,
                             const QVector<float>& confidences);
 
@@ -61,7 +61,7 @@ public:
      *   roi: {x: 10, y: 20, width: 300, height: 200}
      * @param configPath  Path to the YAML file.  No-op if empty or file absent.
      */
-    void loadRoiFromConfig(const QString& configPath);
+    void dsai_loadRoiFromConfig(const QString& configPath);
 
     /**
      * Save the current ROI bounding box to a YAML file.
@@ -70,14 +70,14 @@ public:
      * @param configPath  Destination YAML path.
      * @throws std::runtime_error on write failure.
      */
-    void saveRoiToConfig(const QString& configPath);
+    void dsai_saveRoiToConfig(const QString& configPath);
 
-    void stopCaptureThread();
-    void setClassNames(const QStringList& names);
-    void setRockchipHardware(bool enabled) { rockchipHw_ = enabled; }
+    void dsai_stopCaptureThread();
+    void dsai_setClassNames(const QStringList& names);
+    void dsai_setRockchipHardware(bool enabled) { rockchipHw_ = enabled; }
 
     /** Enable/disable verbose debug logging (forwards to the global Debug flag). */
-    void setDebugLogging(bool enabled);
+    void dsai_setDebugLogging(bool enabled);
 
 signals:
     void boundingBoxChanged(const QRect& box);
@@ -91,9 +91,9 @@ protected:
     void mouseReleaseEvent(QMouseEvent *event) override;
 
 private:
-    void updateFrame();
-    void startCaptureThread();
-    QPointF widgetToImageCoordinates(const QPointF& widgetPos);
+    void dsai_updateFrame();
+    void dsai_startCaptureThread();
+    QPointF dsai_widgetToImageCoordinates(const QPointF& widgetPos);
 
     // Video capture (unavailable when opencv-mobile excludes videoio)
 #ifdef HAVE_OPENCV_VIDEOIO

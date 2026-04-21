@@ -41,7 +41,7 @@ int main(int argc, char* argv[])
     window.show();
 
     if (parser.isSet("config"))
-        window.loadFromConfigFile(parser.value("config"));
+        window.dsai_loadFromConfigFile(parser.value("config"));
 
     return app.exec();
 }

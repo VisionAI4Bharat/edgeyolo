@@ -34,7 +34,7 @@
 
 namespace inference {
 
-const char* DetectorFactory::name(Backend backend) noexcept
+const char* DetectorFactory::dsai_name(Backend backend) noexcept
 {
     switch (backend) {
         case Backend::ONNX:     return "ONNX Runtime";
@@ -44,7 +44,7 @@ const char* DetectorFactory::name(Backend backend) noexcept
     return "Unknown";
 }
 
-bool DetectorFactory::isAvailable(Backend backend) noexcept
+bool DetectorFactory::dsai_isAvailable(Backend backend) noexcept
 {
     switch (backend) {
         case Backend::ONNX:
@@ -69,15 +69,15 @@ bool DetectorFactory::isAvailable(Backend backend) noexcept
     return false;
 }
 
-std::unique_ptr<IDetector> DetectorFactory::create(Backend            backend,
+std::unique_ptr<IDetector> DetectorFactory::dsai_create(Backend            backend,
                                                     const std::string& modelPath,
                                                     const std::string& yamlPath,
                                                     float              confThres,
                                                     float              nmsThres)
 {
-    if (!isAvailable(backend))
+    if (!dsai_isAvailable(backend))
         throw std::runtime_error(
-            std::string("DetectorFactory: backend '") + name(backend) +
+            std::string("DetectorFactory: backend '") + dsai_name(backend) +
             "' was not compiled into this binary.");
 
     std::unique_ptr<IDetector> detector;
@@ -111,10 +111,10 @@ std::unique_ptr<IDetector> DetectorFactory::create(Backend            backend,
 #endif
         default:
             throw std::runtime_error(
-                std::string("DetectorFactory: unhandled backend '") + name(backend) + "'.");
+                std::string("DetectorFactory: unhandled backend '") + dsai_name(backend) + "'.");
     }
 
-    // load() throws std::runtime_error on failure — propagate directly to caller.
+    // dsai_load() throws std::runtime_error on failure — propagate directly to caller.
     detector->load(modelPath, confThres, nmsThres);
 
     return detector;

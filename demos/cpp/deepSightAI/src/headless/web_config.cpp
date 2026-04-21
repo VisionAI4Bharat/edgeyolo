@@ -68,7 +68,7 @@ input[type=checkbox]{flex:none;width:18px;height:18px;accent-color:#2563eb}
 <div class="row"><label>Model file</label><input id="model_file" type="text" placeholder="/path/to/model.rknn"></div>
 <div class="row"><label>YAML file</label><input id="yaml_file" type="text" placeholder="/path/to/model.yaml"></div>
 <div class="row"><label>Class labels (csv)</label><input id="class_labels" type="text" placeholder="person,car,bike"></div>
-<button class="btn" onclick="applyModel()">Apply</button>
+<button class="btn" onclick="dsai_applyModel()">Apply</button>
 <div class="st" id="st-m"></div></div>
 
 <div class="card"><h2>Video Source</h2>
@@ -83,7 +83,7 @@ input[type=checkbox]{flex:none;width:18px;height:18px;accent-color:#2563eb}
 <select id="resolution_index"><option value="0">640x480</option><option value="1">1280x720</option><option value="2">1920x1080</option><option value="3">320x240</option><option value="4">416x416</option></select></div>
 <div class="row"><label>FPS</label><select id="fps_index"><option value="0">15</option><option value="1">25</option><option value="2">30</option><option value="3">60</option><option value="4">90</option></select></div>
 <div class="row"><label>IQ files dir</label><input id="iq_dir" type="text"></div>
-<button class="btn" onclick="applySource()">Apply</button>
+<button class="btn" onclick="dsai_applySource()">Apply</button>
 <div class="st" id="st-s"></div></div>
 
 <div class="card"><h2>Detection</h2>
@@ -98,7 +98,7 @@ input[type=checkbox]{flex:none;width:18px;height:18px;accent-color:#2563eb}
 <div class="row"><label>Y</label><input id="roi_y" type="number" min="0" value="0"></div>
 <div class="row"><label>Width</label><input id="roi_w" type="number" min="0" value="0"></div>
 <div class="row"><label>Height</label><input id="roi_h" type="number" min="0" value="0"></div>
-<button class="btn" onclick="applyRoi()">Apply</button>
+<button class="btn" onclick="dsai_applyRoi()">Apply</button>
 <div class="st" id="st-r"></div></div>
 
 <div class="card"><h2>System</h2>
@@ -170,7 +170,7 @@ async function post(url,body,stId){
   }catch(e){el.style.color='#f87171';el.textContent='✗ '+e.message;}
 }
 
-function applyModel(){
+function dsai_applyModel(){
   post('/api/config/model',{
     backend:+v('backend'),
     rockchip_hw:$('rockchip_hw').checked,
@@ -179,7 +179,7 @@ function applyModel(){
     class_labels:v('class_labels').split(',').map(s=>s.trim()).filter(Boolean)
   },'st-m');
 }
-function applySource(){
+function dsai_applySource(){
   post('/api/config/source',{
     source:+v('source'),
     camera_device_id:+v('camera_device_id'),
@@ -199,7 +199,7 @@ function applyDetection(){
     nms_threshold:+v('nms_threshold')
   },'st-d');
 }
-function applyRoi(){
+function dsai_applyRoi(){
   post('/api/config/roi',{
     roi_enabled:$('roi_enabled').checked,
     roi:{x:+v('roi_x'),y:+v('roi_y'),width:+v('roi_w'),height:+v('roi_h')}
@@ -229,7 +229,7 @@ loadCfg();
 // ── minimal JSON field extractors ─────────────────────────────────────────────
 // All operate on the simple flat JSON the browser sends us.
 
-static bool jStr(const std::string& j, const char* key, std::string& out) {
+static bool dsai_jStr(const std::string& j, const char* key, std::string& out) {
     std::string pat = std::string("\"") + key + "\"";
     size_t pos = j.find(pat);
     if (pos == std::string::npos) return false;
@@ -246,7 +246,7 @@ static bool jStr(const std::string& j, const char* key, std::string& out) {
     return true;
 }
 
-static bool jInt(const std::string& j, const char* key, int& out) {
+static bool dsai_jInt(const std::string& j, const char* key, int& out) {
     std::string pat = std::string("\"") + key + "\"";
     size_t pos = j.find(pat);
     if (pos == std::string::npos) return false;
@@ -274,7 +274,7 @@ static bool jFloat(const std::string& j, const char* key, float& out) {
     catch (...) { return false; }
 }
 
-static bool jBool(const std::string& j, const char* key, bool& out) {
+static bool dsai_jBool(const std::string& j, const char* key, bool& out) {
     std::string pat = std::string("\"") + key + "\"";
     size_t pos = j.find(pat);
     if (pos == std::string::npos) return false;
@@ -304,7 +304,7 @@ static bool jObj(const std::string& j, const char* key, std::string& out) {
     return false;
 }
 
-static std::vector<std::string> jStrArr(const std::string& j, const char* key) {
+static std::vector<std::string> dsai_jStrArr(const std::string& j, const char* key) {
     std::vector<std::string> res;
     std::string pat = std::string("\"") + key + "\"";
     size_t pos = j.find(pat);
@@ -346,24 +346,24 @@ static std::string httpResp(int code, const char* status,
     return std::string(hdr) + body;
 }
 
-static std::string ok200(const std::string& body,
+static std::string dsai_ok200(const std::string& body,
                           const char* ct = "application/json") {
     return httpResp(200, "OK", ct, body);
 }
-static std::string err400(const char* msg) {
+static std::string dsai_err400(const char* msg) {
     std::string b = std::string("{\"error\":\"") + msg + "\"}";
     return httpResp(400, "Bad Request", "application/json", b);
 }
-static std::string err404() {
+static std::string dsai_err404() {
     return httpResp(404, "Not Found", "application/json", "{\"error\":\"not found\"}");
 }
 
 // ── WebConfigServer ───────────────────────────────────────────────────────────
 
 WebConfigServer::WebConfigServer(HeadlessApp& app) : app_(app) {}
-WebConfigServer::~WebConfigServer() { stop(); }
+WebConfigServer::~WebConfigServer() { dsai_stop(); }
 
-bool WebConfigServer::start() {
+bool WebConfigServer::dsai_start() {
     serverFd_ = ::socket(AF_INET, SOCK_STREAM, 0);
     if (serverFd_ < 0) { perror("[WebServer] socket"); return false; }
 
@@ -373,7 +373,7 @@ bool WebConfigServer::start() {
     sockaddr_in addr{};
     addr.sin_family      = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_port        = htons(static_cast<uint16_t>(app_.config().webPort));
+    addr.sin_port        = htons(static_cast<uint16_t>(app_.dsai_config().webPort));
 
     if (::bind(serverFd_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
         perror("[WebServer] bind");
@@ -383,11 +383,11 @@ bool WebConfigServer::start() {
     ::listen(serverFd_, 4);
     running_ = true;
     thread_  = std::thread(&WebConfigServer::serveLoop, this);
-    printf("[WebServer] Listening on http://0.0.0.0:%d\n", app_.config().webPort);
+    printf("[WebServer] Listening on http://0.0.0.0:%d\n", app_.dsai_config().webPort);
     return true;
 }
 
-void WebConfigServer::stop() {
+void WebConfigServer::dsai_stop() {
     running_ = false;
     if (serverFd_ >= 0) {
         ::shutdown(serverFd_, SHUT_RDWR);
@@ -459,28 +459,28 @@ std::string WebConfigServer::dispatch(const std::string& method,
                                        const std::string& path,
                                        const std::string& body) {
     if (path == "/" && method == "GET")
-        return ok200(kDashboard, "text/html; charset=utf-8");
+        return dsai_ok200(kDashboard, "text/html; charset=utf-8");
 
     if (path == "/api/config" && method == "GET")
-        return ok200(jsonConfigResp());
+        return dsai_ok200(dsai_jsonConfigResp());
 
-    if (path == "/api/config/model"     && method == "POST") return applyModel(body);
-    if (path == "/api/config/source"    && method == "POST") return applySource(body);
+    if (path == "/api/config/model"     && method == "POST") return dsai_applyModel(body);
+    if (path == "/api/config/source"    && method == "POST") return dsai_applySource(body);
     if (path == "/api/config/detection" && method == "POST") return applyDetection(body);
-    if (path == "/api/config/roi"       && method == "POST") return applyRoi(body);
+    if (path == "/api/config/roi"       && method == "POST") return dsai_applyRoi(body);
     if (path == "/api/config/system"    && method == "POST") return applySystem(body);
-    if (path == "/api/restart"          && method == "POST") return triggerRestart();
+    if (path == "/api/restart"          && method == "POST") return dsai_triggerRestart();
 
     if (method == "OPTIONS")
         return httpResp(204, "No Content", "text/plain", "");
 
-    return err404();
+    return dsai_err404();
 }
 
 // ── GET /api/config ───────────────────────────────────────────────────────────
 
-std::string WebConfigServer::jsonConfigResp() {
-    const AppConfig& c = app_.config();
+std::string WebConfigServer::dsai_jsonConfigResp() {
+    const AppConfig& c = app_.dsai_config();
 
     std::string labels = "[";
     for (size_t i = 0; i < c.classLabels.size(); ++i) {
@@ -534,78 +534,78 @@ std::string WebConfigServer::jsonConfigResp() {
 // Each handler patches the in-memory config and saves to disk.
 // Restart must be triggered separately via POST /api/restart.
 
-static void saveConfig(HeadlessApp& app) {
-    try { app.config().saveToFile(app.configPath()); }
+static void dsai_saveConfig(HeadlessApp& app) {
+    try { app.dsai_config().saveToFile(app.configPath()); }
     catch (const std::exception& e) {
         fprintf(stderr, "[WebServer] config save: %s\n", e.what());
     }
 }
 
-std::string WebConfigServer::applyModel(const std::string& body) {
-    AppConfig& c = app_.config();
+std::string WebConfigServer::dsai_applyModel(const std::string& body) {
+    AppConfig& c = app_.dsai_config();
     int ival; std::string s; bool bval;
-    if (jInt(body, "backend",    ival)) c.backend   = static_cast<Backend>(ival);
-    if (jBool(body, "rockchip_hw", bval)) c.rockchipHw = bval;
-    if (jStr(body, "model_file", s))    c.modelFile = s;
-    if (jStr(body, "yaml_file",  s))    c.yamlFile  = s;
+    if (dsai_jInt(body, "backend",    ival)) c.backend   = static_cast<Backend>(ival);
+    if (dsai_jBool(body, "rockchip_hw", bval)) c.rockchipHw = bval;
+    if (dsai_jStr(body, "model_file", s))    c.modelFile = s;
+    if (dsai_jStr(body, "yaml_file",  s))    c.yamlFile  = s;
     if (body.find("\"class_labels\"") != std::string::npos)
-        c.classLabels = jStrArr(body, "class_labels");
-    saveConfig(app_);
-    return ok200("{\"ok\":true}");
+        c.classLabels = dsai_jStrArr(body, "class_labels");
+    dsai_saveConfig(app_);
+    return dsai_ok200("{\"ok\":true}");
 }
 
-std::string WebConfigServer::applySource(const std::string& body) {
-    AppConfig& c = app_.config();
+std::string WebConfigServer::dsai_applySource(const std::string& body) {
+    AppConfig& c = app_.dsai_config();
     int ival; std::string s;
-    if (jInt(body, "source",           ival)) c.source          = static_cast<SourceType>(ival);
-    if (jInt(body, "camera_device_id", ival)) c.cameraDeviceId  = ival;
-    if (jStr(body, "rtsp_url",         s))    c.rtspUrl         = s;
-    if (jStr(body, "video_file",       s))    c.videoFile       = s;
-    if (jStr(body, "iq_dir",           s))    c.iqDir           = s;
-    if (jInt(body, "gain",             ival)) c.gain            = ival;
-    if (jInt(body, "gamma",            ival)) c.gamma           = ival;
-    if (jInt(body, "brightness",       ival)) c.brightness      = ival;
-    if (jInt(body, "resolution_index", ival)) c.resolutionIndex = ival;
-    if (jInt(body, "fps_index",        ival)) c.fpsIndex        = ival;
-    saveConfig(app_);
-    return ok200("{\"ok\":true}");
+    if (dsai_jInt(body, "source",           ival)) c.source          = static_cast<SourceType>(ival);
+    if (dsai_jInt(body, "camera_device_id", ival)) c.cameraDeviceId  = ival;
+    if (dsai_jStr(body, "rtsp_url",         s))    c.rtspUrl         = s;
+    if (dsai_jStr(body, "video_file",       s))    c.videoFile       = s;
+    if (dsai_jStr(body, "iq_dir",           s))    c.iqDir           = s;
+    if (dsai_jInt(body, "gain",             ival)) c.gain            = ival;
+    if (dsai_jInt(body, "gamma",            ival)) c.gamma           = ival;
+    if (dsai_jInt(body, "brightness",       ival)) c.brightness      = ival;
+    if (dsai_jInt(body, "resolution_index", ival)) c.resolutionIndex = ival;
+    if (dsai_jInt(body, "fps_index",        ival)) c.fpsIndex        = ival;
+    dsai_saveConfig(app_);
+    return dsai_ok200("{\"ok\":true}");
 }
 
 std::string WebConfigServer::applyDetection(const std::string& body) {
-    AppConfig& c = app_.config();
+    AppConfig& c = app_.dsai_config();
     float fval;
     if (jFloat(body, "conf_threshold", fval)) c.confThreshold = fval;
     if (jFloat(body, "nms_threshold",  fval)) c.nmsThreshold  = fval;
-    saveConfig(app_);
-    return ok200("{\"ok\":true}");
+    dsai_saveConfig(app_);
+    return dsai_ok200("{\"ok\":true}");
 }
 
-std::string WebConfigServer::applyRoi(const std::string& body) {
-    AppConfig& c = app_.config();
+std::string WebConfigServer::dsai_applyRoi(const std::string& body) {
+    AppConfig& c = app_.dsai_config();
     bool bval;
-    if (jBool(body, "roi_enabled", bval)) c.roiEnabled = bval;
+    if (dsai_jBool(body, "roi_enabled", bval)) c.roiEnabled = bval;
     std::string obj;
     if (jObj(body, "roi", obj)) {
         int v;
-        if (jInt(obj, "x",      v)) c.roi.x      = v;
-        if (jInt(obj, "y",      v)) c.roi.y      = v;
-        if (jInt(obj, "width",  v)) c.roi.width  = v;
-        if (jInt(obj, "height", v)) c.roi.height = v;
+        if (dsai_jInt(obj, "x",      v)) c.roi.x      = v;
+        if (dsai_jInt(obj, "y",      v)) c.roi.y      = v;
+        if (dsai_jInt(obj, "width",  v)) c.roi.width  = v;
+        if (dsai_jInt(obj, "height", v)) c.roi.height = v;
     }
-    saveConfig(app_);
-    return ok200("{\"ok\":true}");
+    dsai_saveConfig(app_);
+    return dsai_ok200("{\"ok\":true}");
 }
 
 std::string WebConfigServer::applySystem(const std::string& body) {
-    AppConfig& c = app_.config();
+    AppConfig& c = app_.dsai_config();
     int ival; bool bval;
-    if (jInt(body,  "web_port",      ival)) c.webPort      = ival;
-    if (jBool(body, "debug_logging", bval)) c.debugLogging = bval;
-    saveConfig(app_);
-    return ok200("{\"ok\":true}");
+    if (dsai_jInt(body,  "web_port",      ival)) c.webPort      = ival;
+    if (dsai_jBool(body, "debug_logging", bval)) c.debugLogging = bval;
+    dsai_saveConfig(app_);
+    return dsai_ok200("{\"ok\":true}");
 }
 
-std::string WebConfigServer::triggerRestart() {
-    app_.requestRestart();
-    return ok200("{\"ok\":true,\"message\":\"restarting\"}");
+std::string WebConfigServer::dsai_triggerRestart() {
+    app_.dsai_requestRestart();
+    return dsai_ok200("{\"ok\":true,\"message\":\"restarting\"}");
 }

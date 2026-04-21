@@ -249,18 +249,18 @@ static bool vi_read(RockchipCapture::Impl* p, cv::Mat& bgrOut)
 RockchipCapture::RockchipCapture()
     : pImpl_(std::make_unique<Impl>()) {}
 
-RockchipCapture::~RockchipCapture() { release(); }
+RockchipCapture::~RockchipCapture() { dsai_release(); }
 
 RockchipCapture::RockchipCapture(RockchipCapture&& o) noexcept
     : pImpl_(std::move(o.pImpl_)) {}
 
 RockchipCapture& RockchipCapture::operator=(RockchipCapture&& o) noexcept {
-    if (this != &o) { release(); pImpl_ = std::move(o.pImpl_); }
+    if (this != &o) { dsai_release(); pImpl_ = std::move(o.pImpl_); }
     return *this;
 }
 
-bool RockchipCapture::openCamera(const CameraConfig& cfg) {
-    release();
+bool RockchipCapture::dsai_openCamera(const CameraConfig& cfg) {
+    dsai_release();
     pImpl_ = std::make_unique<Impl>();
     pImpl_->isCam = true;
 
@@ -273,8 +273,8 @@ bool RockchipCapture::openCamera(const CameraConfig& cfg) {
     // Desktop / development fallback: V4L2 via OpenCV
     pImpl_->setError("Built without WITH_RKNN — using cv::VideoCapture fallback");
     pImpl_->cvCap.open(cfg.devId, cv::CAP_V4L2);
-    if (!pImpl_->cvCap.isOpened()) pImpl_->cvCap.open(cfg.devId);
-    if (!pImpl_->cvCap.isOpened()) {
+    if (!pImpl_->cvCap.dsai_isOpened()) pImpl_->cvCap.open(cfg.devId);
+    if (!pImpl_->cvCap.dsai_isOpened()) {
         pImpl_->setError("cv::VideoCapture could not open device " +
                           std::to_string(cfg.devId));
         return false;
@@ -294,14 +294,14 @@ bool RockchipCapture::openCamera(const CameraConfig& cfg) {
 #endif
 }
 
-bool RockchipCapture::openRtsp(const RtspConfig& cfg) {
-    release();
+bool RockchipCapture::dsai_openRtsp(const RtspConfig& cfg) {
+    dsai_release();
     pImpl_ = std::make_unique<Impl>();
     pImpl_->isCam = false;
 
 #ifdef HAVE_OPENCV_VIDEOIO
     pImpl_->cvCap.open(cfg.url, cv::CAP_FFMPEG);
-    if (!pImpl_->cvCap.isOpened()) {
+    if (!pImpl_->cvCap.dsai_isOpened()) {
         pImpl_->setError("Failed to open RTSP stream: " + cfg.url);
         return false;
     }
@@ -317,11 +317,11 @@ bool RockchipCapture::openRtsp(const RtspConfig& cfg) {
 #endif
 }
 
-bool RockchipCapture::isOpened() const noexcept {
+bool RockchipCapture::dsai_isOpened() const noexcept {
     return pImpl_ && pImpl_->isOpen;
 }
 
-bool RockchipCapture::read(cv::Mat& bgrFrame) {
+bool RockchipCapture::dsai_read(cv::Mat& bgrFrame) {
     if (!pImpl_ || !pImpl_->isOpen) return false;
 
 #ifdef WITH_RKNN
@@ -329,13 +329,13 @@ bool RockchipCapture::read(cv::Mat& bgrFrame) {
 #endif
 
 #ifdef HAVE_OPENCV_VIDEOIO
-    return pImpl_->cvCap.read(bgrFrame);
+    return pImpl_->cvCap.dsai_read(bgrFrame);
 #else
     return false;
 #endif
 }
 
-void RockchipCapture::release() {
+void RockchipCapture::dsai_release() {
     if (!pImpl_ || !pImpl_->isOpen) return;
 
 #ifdef WITH_RKNN
@@ -343,16 +343,16 @@ void RockchipCapture::release() {
 #endif
 
 #ifdef HAVE_OPENCV_VIDEOIO
-    if (pImpl_->cvCap.isOpened()) pImpl_->cvCap.release();
+    if (pImpl_->cvCap.dsai_isOpened()) pImpl_->cvCap.dsai_release();
 #endif
     pImpl_->isOpen = false;
 }
 
-int    RockchipCapture::captureWidth()  const noexcept { return pImpl_ ? pImpl_->width  : 0; }
-int    RockchipCapture::captureHeight() const noexcept { return pImpl_ ? pImpl_->height : 0; }
-double RockchipCapture::captureFps()    const noexcept { return pImpl_ ? pImpl_->fps    : 0.0; }
+int    RockchipCapture::dsai_captureWidth()  const noexcept { return pImpl_ ? pImpl_->width  : 0; }
+int    RockchipCapture::dsai_captureHeight() const noexcept { return pImpl_ ? pImpl_->height : 0; }
+double RockchipCapture::dsai_captureFps()    const noexcept { return pImpl_ ? pImpl_->fps    : 0.0; }
 
-std::string RockchipCapture::lastError() const {
+std::string RockchipCapture::dsai_lastError() const {
     return pImpl_ ? pImpl_->lastErr : std::string{};
 }
 

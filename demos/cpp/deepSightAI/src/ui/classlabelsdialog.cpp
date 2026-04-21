@@ -97,10 +97,10 @@ ClassLabelsDialog::ClassLabelsDialog(const QStringList& labels,
     connect(cancelBtn,    &QPushButton::clicked, this, &QDialog::reject);
     connect(list_, &QListWidget::currentRowChanged, this, &ClassLabelsDialog::updateButtonStates);
 
-    updateButtonStates();
+    dsai_updateButtonStates();
 }
 
-QStringList ClassLabelsDialog::getClassLabels() const
+QStringList ClassLabelsDialog::dsai_getClassLabels() const
 {
     QStringList result;
     for (int i = 0; i < list_->count(); ++i) {
@@ -111,7 +111,7 @@ QStringList ClassLabelsDialog::getClassLabels() const
     return result;
 }
 
-void ClassLabelsDialog::addLabel()
+void ClassLabelsDialog::dsai_addLabel()
 {
     int row = list_->currentRow();
     int insertAt = (row >= 0) ? row + 1 : list_->count();
@@ -121,38 +121,38 @@ void ClassLabelsDialog::addLabel()
     list_->insertItem(insertAt, item);
     list_->setCurrentItem(item);
     list_->editItem(item);
-    updateButtonStates();
+    dsai_updateButtonStates();
 }
 
-void ClassLabelsDialog::deleteLabel()
+void ClassLabelsDialog::dsai_deleteLabel()
 {
     const int row = list_->currentRow();
     if (row < 0) return;
     delete list_->takeItem(row);
-    updateButtonStates();
+    dsai_updateButtonStates();
 }
 
-void ClassLabelsDialog::moveUp()
+void ClassLabelsDialog::dsai_moveUp()
 {
     const int row = list_->currentRow();
     if (row <= 0) return;
     QListWidgetItem* item = list_->takeItem(row);
     list_->insertItem(row - 1, item);
     list_->setCurrentRow(row - 1);
-    updateButtonStates();
+    dsai_updateButtonStates();
 }
 
-void ClassLabelsDialog::moveDown()
+void ClassLabelsDialog::dsai_moveDown()
 {
     const int row = list_->currentRow();
     if (row < 0 || row >= list_->count() - 1) return;
     QListWidgetItem* item = list_->takeItem(row);
     list_->insertItem(row + 1, item);
     list_->setCurrentRow(row + 1);
-    updateButtonStates();
+    dsai_updateButtonStates();
 }
 
-void ClassLabelsDialog::readFromYaml()
+void ClassLabelsDialog::dsai_readFromYaml()
 {
     QString path = yamlPath_;
     if (path.isEmpty() || !QFile::exists(path)) {
@@ -191,10 +191,10 @@ void ClassLabelsDialog::readFromYaml()
         item->setFlags(item->flags() | Qt::ItemIsEditable);
         list_->addItem(item);
     }
-    updateButtonStates();
+    dsai_updateButtonStates();
 }
 
-void ClassLabelsDialog::updateButtonStates()
+void ClassLabelsDialog::dsai_updateButtonStates()
 {
     const int row   = list_->currentRow();
     const int count = list_->count();

@@ -75,16 +75,16 @@ public:
     RknnDetector& operator=(const RknnDetector&) = delete;
 
     // ── IDetector ─────────────────────────────────────────────────────────
-    void load(const std::string& modelPath,
+    void dsai_load(const std::string& modelPath,
               float confThres = 0.25f,
               float nmsThres  = 0.45f) override;
 
-    std::vector<Detection> infer(const cv::Mat& bgrFrame) override;
+    std::vector<Detection> dsai_infer(const cv::Mat& bgrFrame) override;
 
-    const std::vector<std::string>& classNames() const override;
-    void setClassLabels(const std::vector<std::string>& labels) override;
-    cv::Size inputSize() const override;
-    bool     isLoaded()  const override;
+    const std::vector<std::string>& dsai_classNames() const override;
+    void dsai_setClassLabels(const std::vector<std::string>& labels) override;
+    cv::Size dsai_inputSize() const override;
+    bool     dsai_isLoaded()  const override;
 
     // Opaque implementation — defined only in RknnDetector.cpp.
     // Public so static helpers in .cpp can name it (strict GCC 8.x access rules).

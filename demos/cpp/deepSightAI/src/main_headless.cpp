@@ -92,7 +92,7 @@ int main(int argc, char* argv[]) {
         if (!web.start()) {
             fprintf(stderr,
                 "[main] Web server could not bind port %d — continuing without it.\n",
-                app.config().webPort);
+                app.dsai_config().webPort);
         }
 
         const int code = app.run();

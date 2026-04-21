@@ -60,8 +60,8 @@ public:
     ~OnnxDetector() override = default;
 
     /**
-     * Optionally set the YAML config path before calling load().
-     * If not called, load() looks for <modelBaseName>.yaml next to the model.
+     * Optionally set the YAML config path before calling dsai_load().
+     * If not called, dsai_load() looks for <modelBaseName>.yaml next to the model.
      */
     void setYamlPath(const std::string& yamlPath) { yamlPath_ = yamlPath; }
 
@@ -71,21 +71,21 @@ public:
      * @throws std::runtime_error if model or YAML cannot be loaded,
      *         or if the output tensor shape is unexpected.
      */
-    void load(const std::string& modelPath,
+    void dsai_load(const std::string& modelPath,
               float confThres = 0.25f,
               float nmsThres  = 0.45f) override;
 
     /**
      * @throws std::runtime_error on ORT session run failure.
      */
-    std::vector<Detection> infer(const cv::Mat& frame) override;
+    std::vector<Detection> dsai_infer(const cv::Mat& frame) override;
 
-    const std::vector<std::string>& classNames() const override { return classNames_; }
-    void setClassLabels(const std::vector<std::string>& labels) override {
+    const std::vector<std::string>& dsai_classNames() const override { return classNames_; }
+    void dsai_setClassLabels(const std::vector<std::string>& labels) override {
         classNames_ = labels; numClasses_ = static_cast<int>(labels.size());
     }
-    cv::Size inputSize() const override { return inputSize_; }
-    bool     isLoaded()  const override { return loaded_; }
+    cv::Size dsai_inputSize() const override { return inputSize_; }
+    bool     dsai_isLoaded()  const override { return loaded_; }
 
 private:
     void loadYaml(const std::string& modelPath);

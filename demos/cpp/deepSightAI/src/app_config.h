@@ -74,14 +74,14 @@ struct AppConfig {
     bool        debugLogging    = false;
 
     // ── helpers ────────────────────────────────────────────────────────────
-    int  width()  const;
-    int  height() const;
-    int  fps()    const;
+    int.width()  const;
+    int.height() const;
+    int  dsai_fps()    const;
 
     // Load from / save to a YAML file. Throws std::runtime_error on failure.
-    static AppConfig loadFromFile(const std::string& path);
-    void saveToFile(const std::string& path) const;
+    static AppConfig dsai_loadFromFile(const std::string& path);
+    void dsai_saveToFile(const std::string& path) const;
 
     // Default config-file location (XDG or /etc fallback)
-    static std::string defaultPath();
+    static std::string dsai_defaultPath();
 };

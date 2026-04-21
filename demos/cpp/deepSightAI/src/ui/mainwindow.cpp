@@ -41,17 +41,17 @@ DetectionWorker::DetectionWorker(QObject* parent)
 
 DetectionWorker::~DetectionWorker()
 {
-    stop();
+    dsai_stop();
     wait();
 }
 
-void DetectionWorker::setDetector(inference::IDetector* detector)
+void DetectionWorker::dsai_setDetector(inference::IDetector* detector)
 {
     QMutexLocker lock(&mutex_);
     detector_ = detector;
 }
 
-void DetectionWorker::pushFrame(const cv::Mat& frame)
+void DetectionWorker::dsai_pushFrame(const cv::Mat& frame)
 {
     QMutexLocker lock(&mutex_);
     pendingFrame_ = frame.clone();
@@ -59,14 +59,14 @@ void DetectionWorker::pushFrame(const cv::Mat& frame)
     condition_.wakeOne();
 }
 
-void DetectionWorker::setEnabled(bool enabled)
+void DetectionWorker::dsai_setEnabled(bool enabled)
 {
     QMutexLocker lock(&mutex_);
     enabled_ = enabled;
     if (enabled_) condition_.wakeOne();
 }
 
-void DetectionWorker::stop()
+void DetectionWorker::dsai_stop()
 {
     QMutexLocker lock(&mutex_);
     stopped_ = true;
@@ -111,7 +111,7 @@ void DetectionWorker::run()
             using Clock = std::chrono::high_resolution_clock;
 
             auto t0 = Clock::now();
-            detections = det->infer(frame);
+            detections = det->dsai_infer(frame);
             auto t1 = Clock::now();
 
             inferMs = std::chrono::duration<float, std::milli>(t1 - t0).count();
@@ -119,7 +119,7 @@ void DetectionWorker::run()
                 detections.size(), static_cast<double>(inferMs));
         }
         catch (const std::exception& e) {
-            ERR_LOG(WK_TAG, "infer() threw: %s\n", e.what());
+            ERR_LOG(WK_TAG, "dsai_infer() threw: %s\n", e.what());
             continue;
         }
 
@@ -171,17 +171,17 @@ void DetectionWorker::run()
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
 {
-    setupUI();
-    setupConnections();
+    dsai_setupUI();
+    dsai_setupConnections();
 }
 
 MainWindow::~MainWindow()
 {
-    stopWorker();
+    dsai_stopWorker();
     // detector_ destroyed by unique_ptr after worker is confirmed stopped
 }
 
-void MainWindow::setupUI()
+void MainWindow::dsai_setupUI()
 {
     setWindowTitle("deepSightAI");
     resize(1280, 800);
@@ -233,7 +233,7 @@ void MainWindow::setupUI()
     clockTimer_->start(1000);
 }
 
-void MainWindow::setupConnections()
+void MainWindow::dsai_setupConnections()
 {
     connect(configButton_, &QPushButton::clicked, this, &MainWindow::openConfigDialog);
     connect(videoWidget_,  &VideoWidget::boundingBoxChanged,
@@ -243,18 +243,18 @@ void MainWindow::setupConnections()
 
 // ─── config ───────────────────────────────────────────────────────────────────
 
-void MainWindow::loadFromConfigFile(const QString& configPath)
+void MainWindow::dsai_loadFromConfigFile(const QString& configPath)
 {
     AppConfig cfg;
     try {
-        cfg = AppConfig::loadFromFile(configPath.toStdString());
+        cfg = AppConfig::dsai_loadFromFile(configPath.toStdString());
     } catch (const std::exception& e) {
         QMessageBox::critical(this, "Config Error",
             QString("Failed to parse config file:\n%1\n\n%2").arg(configPath).arg(e.what()));
         return;
     }
 
-    stopWorker();
+    dsai_stopWorker();
 
     debugLogging_ = cfg.debugLogging;
     Debug::setEnabled(debugLogging_);
@@ -269,11 +269,11 @@ void MainWindow::loadFromConfigFile(const QString& configPath)
         const QString path = isUsingVideoFile_
             ? QString::fromStdString(cfg.videoFile)
             : QString::fromStdString(cfg.rtspUrl);
-        videoWidget_->setVideoSource(path);
+        videoWidget_->dsai_setVideoSource(path);
         statusBar_->showMessage("Source: " + path);
     } else {
         const int camId = cfg.cameraDeviceId;
-        videoWidget_->setCameraDevice(camId);
+        videoWidget_->dsai_setCameraDevice(camId);
         statusBar_->showMessage("Camera device: " + QString::number(camId));
     }
 
@@ -283,7 +283,7 @@ void MainWindow::loadFromConfigFile(const QString& configPath)
     }
 
     const bool rockchipHw = cfg.rockchipHw;
-    videoWidget_->setRockchipHardware(rockchipHw);
+    videoWidget_->dsai_setRockchipHardware(rockchipHw);
     inference::Backend backend = rockchipHw
         ? inference::Backend::RKNN
         : static_cast<inference::Backend>(cfg.backend);
@@ -295,38 +295,38 @@ void MainWindow::loadFromConfigFile(const QString& configPath)
     for (const auto& n : cfg.classLabels)
         classLabels << QString::fromStdString(n);
 
-    initializeDetector(backend, modelFilePath_, yamlFilePath_,
+    dsai_initializeDetector(backend, modelFilePath_, yamlFilePath_,
                        confThres, nmsThres, classLabels);
 
-    videoWidget_->loadRoiFromConfig(roiConfigPath_);
+    videoWidget_->dsai_loadRoiFromConfig(roiConfigPath_);
 }
 
-void MainWindow::openConfigDialog()
+void MainWindow::dsai_openConfigDialog()
 {
     ConfigDialog dlg(this);
     if (dlg.exec() != QDialog::Accepted) return;
 
     // Apply debug logging flag first so subsequent calls already use it
-    debugLogging_ = dlg.isDebugLoggingEnabled();
+    debugLogging_ = dlg.dsai_isDebugLoggingEnabled();
     Debug::setEnabled(debugLogging_);
     DBG_LOG(MW_TAG, "config accepted — debug logging %s\n",
         debugLogging_ ? "ON" : "OFF");
 
     // Stop any running worker before touching the detector
-    stopWorker();
+    dsai_stopWorker();
 
-    modelFilePath_    = dlg.getModelFilePath();
-    yamlFilePath_     = dlg.getYamlPath();
-    isUsingVideoFile_ = dlg.isUsingVideoFile();
-    isUsingRtspStream_ = dlg.isUsingRtspStream();
+    modelFilePath_    = dlg.dsai_getModelFilePath();
+    yamlFilePath_     = dlg.dsai_getYamlPath();
+    isUsingVideoFile_ = dlg.dsai_isUsingVideoFile();
+    isUsingRtspStream_ = dlg.dsai_isUsingRtspStream();
 
     // Update video source
     if (isUsingVideoFile_ || isUsingRtspStream_) {
-        videoWidget_->setVideoSource(dlg.getVideoOrRtspPath());
-        statusBar_->showMessage("Source: " + dlg.getVideoOrRtspPath());
+        videoWidget_->dsai_setVideoSource(dlg.dsai_getVideoOrRtspPath());
+        statusBar_->showMessage("Source: " + dlg.dsai_getVideoOrRtspPath());
     } else {
-        videoWidget_->setCameraDevice(dlg.getCameraDeviceId());
-        statusBar_->showMessage("Camera device: " + QString::number(dlg.getCameraDeviceId()));
+        videoWidget_->dsai_setCameraDevice(dlg.dsai_getCameraDeviceId());
+        statusBar_->showMessage("Camera device: " + QString::number(dlg.dsai_getCameraDeviceId()));
     }
 
     // Derive ROI config path: same directory as model, named <modelBaseName>_roi.yaml
@@ -335,24 +335,24 @@ void MainWindow::openConfigDialog()
         roiConfigPath_ = fi.absolutePath() + "/" + fi.completeBaseName() + "_roi.yaml";
     }
 
-    const bool rockchipHw = dlg.isRockchipHardware();
-    videoWidget_->setRockchipHardware(rockchipHw);
+    const bool rockchipHw = dlg.dsai_isRockchipHardware();
+    videoWidget_->dsai_setRockchipHardware(rockchipHw);
 
     // If Rockchip HW is selected, force RKNN backend
     inference::Backend backend = rockchipHw
         ? inference::Backend::RKNN
-        : dlg.getBackend();
+        : dlg.dsai_getBackend();
 
     // Initialise detector
-    initializeDetector(backend, modelFilePath_, yamlFilePath_,
-                       dlg.getConfThreshold(), dlg.getNmsThreshold(),
-                       dlg.getClassLabels());
+    dsai_initializeDetector(backend, modelFilePath_, yamlFilePath_,
+                       dlg.dsai_getConfThreshold(), dlg.dsai_getNmsThreshold(),
+                       dlg.dsai_getClassLabels());
 
     // Load previously saved ROI (no-op if file absent)
-    videoWidget_->loadRoiFromConfig(roiConfigPath_);
+    videoWidget_->dsai_loadRoiFromConfig(roiConfigPath_);
 }
 
-void MainWindow::initializeDetector(inference::Backend  backend,
+void MainWindow::dsai_initializeDetector(inference::Backend  backend,
                                      const QString&      modelPath,
                                      const QString&      yamlPath,
                                      float               confThres,
@@ -370,7 +370,7 @@ void MainWindow::initializeDetector(inference::Backend  backend,
         static_cast<double>(confThres), static_cast<double>(nmsThres));
 
     try {
-        detector_ = inference::DetectorFactory::create(
+        detector_ = inference::DetectorFactory::dsai_create(
             backend,
             modelPath.toStdString(),
             yamlPath.toStdString(),
@@ -386,7 +386,7 @@ void MainWindow::initializeDetector(inference::Backend  backend,
         statusBar_->showMessage("Model load failed.");
 
         // Stop the video capture thread because model failed to load
-        videoWidget_->stopCaptureThread();
+        videoWidget_->dsai_stopCaptureThread();
 
         return;
     }
@@ -396,33 +396,33 @@ void MainWindow::initializeDetector(inference::Backend  backend,
         labels.reserve(classLabels.size());
         for (const QString& s : classLabels)
             labels.push_back(s.toStdString());
-        detector_->setClassLabels(labels);
+        detector_->dsai_setClassLabels(labels);
     }
 
     DBG_LOG(MW_TAG, "model loaded OK — %zu classes  input %dx%d\n",
-        detector_->classNames().size(),
-        detector_->inputSize().width, detector_->inputSize().height);
+        detector_->dsai_classNames().size(),
+        detector_->dsai_inputSize().width, detector_->dsai_inputSize().height);
 
-    const auto& names = detector_->classNames();
-    populateClassCheckboxes(names);
+    const auto& names = detector_->dsai_classNames();
+    dsai_populateClassCheckboxes(names);
 
     QStringList qnames;
     qnames.reserve(static_cast<int>(names.size()));
     for (const auto& n : names)
         qnames.append(QString::fromStdString(n));
-    videoWidget_->setClassNames(qnames);
+    videoWidget_->dsai_setClassNames(qnames);
 
-    videoWidget_->setEditMode(false);
-    startWorker();
+    videoWidget_->dsai_setEditMode(false);
+    dsai_startWorker();
 
     statusBar_->showMessage(
         QString("Model loaded (%1, %2 classes) — detection running.")
-        .arg(inference::DetectorFactory::name(backend))
-        .arg(static_cast<int>(detector_->classNames().size()))
+        .arg(inference::DetectorFactory::dsai_name(backend))
+        .arg(static_cast<int>(detector_->dsai_classNames().size()))
     );
 }
 
-void MainWindow::populateClassCheckboxes(const std::vector<std::string>& names)
+void MainWindow::dsai_populateClassCheckboxes(const std::vector<std::string>& names)
 {
     // Clear existing
     for (auto* cb : classCheckboxes_) delete cb;
@@ -447,7 +447,7 @@ void MainWindow::populateClassCheckboxes(const std::vector<std::string>& names)
 
 // ─── worker management ────────────────────────────────────────────────────────
 
-void MainWindow::startWorker()
+void MainWindow::dsai_startWorker()
 {
     if (!detector_) {
         ERR_LOG(MW_TAG, "startWorker called but no detector — aborting\n");
@@ -457,7 +457,7 @@ void MainWindow::startWorker()
 
     DBG_LOG(MW_TAG, "starting detection worker\n");
     worker_ = new DetectionWorker(this);
-    worker_->setDetector(detector_.get());
+    worker_->dsai_setDetector(detector_.get());
 
     connect(worker_, &DetectionWorker::detectionResultsReady,
             this,    &MainWindow::onDetectionResults);
@@ -472,15 +472,15 @@ void MainWindow::startWorker()
     // capture thread (QThread::create lambda), so the default auto-connection
     // would be queued. Queued connections copy their arguments, which requires
     // cv::Mat to be a registered Qt meta-type — it isn't — so the event would
-    // be silently dropped and pushFrame() would never be called.
+    // be silently dropped and dsai_pushFrame() would never be called.
     // DirectConnection runs the lambda in the capture thread directly;
-    // pushFrame() is mutex-protected so this is thread-safe.
+    // dsai_pushFrame() is mutex-protected so this is thread-safe.
     connect(videoWidget_, &VideoWidget::frameReady,
-            worker_,      [this](const cv::Mat& f){ worker_->pushFrame(f); },
+            worker_,      [this](const cv::Mat& f){ worker_->dsai_pushFrame(f); },
             Qt::DirectConnection);
 }
 
-void MainWindow::stopWorker()
+void MainWindow::dsai_stopWorker()
 {
     if (!worker_) return;
     DBG_LOG(MW_TAG, "stopping detection worker\n");
@@ -495,7 +495,7 @@ void MainWindow::stopWorker()
 
 // ─── slots ────────────────────────────────────────────────────────────────────
 
-void MainWindow::onDetectionResults(QVector<QRect>  boxes,
+void MainWindow::dsai_onDetectionResults(QVector<QRect>  boxes,
                                      QVector<int>    classIds,
                                      QVector<float>  confidences)
 {
@@ -514,10 +514,10 @@ void MainWindow::onDetectionResults(QVector<QRect>  boxes,
         filteredConfs.append(confidences[i]);
     }
 
-    videoWidget_->setDetectionResults(filteredBoxes, filteredIds, filteredConfs);
+    videoWidget_->dsai_setDetectionResults(filteredBoxes, filteredIds, filteredConfs);
 }
 
-void MainWindow::onPerformanceMetrics(float fps, float inferLatency,
+void MainWindow::dsai_onPerformanceMetrics(float fps, float inferLatency,
                                        float nmsLatency, float avgLatency)
 {
     fpsLabel_->setText(     QString("FPS: %1")            .arg(fps,          0, 'f', 1));
@@ -526,12 +526,12 @@ void MainWindow::onPerformanceMetrics(float fps, float inferLatency,
     avgLatLabel_->setText(  QString("Avg (30f): %1 ms")   .arg(avgLatency,   0, 'f', 1));
 }
 
-void MainWindow::updateClock()
+void MainWindow::dsai_updateClock()
 {
     timeLabel_->setText("Time: " + QDateTime::currentDateTime().toString("HH:mm:ss"));
 }
 
-void MainWindow::handleBoundingBoxChanged(const QRect& box)
+void MainWindow::dsai_handleBoundingBoxChanged(const QRect& box)
 {
     currentBoundingBox_ = box;
 
@@ -547,7 +547,7 @@ void MainWindow::handleBoundingBoxChanged(const QRect& box)
     if (roiConfigPath_.isEmpty()) return;
 
     try {
-        videoWidget_->saveRoiToConfig(roiConfigPath_);
+        videoWidget_->dsai_saveRoiToConfig(roiConfigPath_);
     }
     catch (const std::exception& e) {
         qWarning() << "MainWindow: failed to save ROI config:" << e.what();

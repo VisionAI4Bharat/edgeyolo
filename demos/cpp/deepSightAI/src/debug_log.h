@@ -26,7 +26,7 @@
 /**
  * Lightweight debug logging controlled by a single global flag.
  *
- * Enable at runtime via Debug::setEnabled(true) — toggled from the
+ * Enable at runtime via Debug::dsai_setEnabled(true) — toggled from the
  * "Debug Logging" checkbox in the Configure dialog.
  *
  * DBG_LOG(tag, fmt, ...)  — stdout, only when enabled
@@ -34,7 +34,7 @@
  */
 namespace Debug {
     extern std::atomic<bool> enabled;
-    inline void setEnabled(bool on) { enabled.store(on); }
+    inline void dsai_setEnabled(bool on) { enabled.store(on); }
     inline bool isEnabled()         { return enabled.load(); }
 }
 

@@ -42,11 +42,11 @@ struct Detection {
  *
  * Lifecycle:
  *   1. Construct the concrete subclass.
- *   2. Call load() — throws std::runtime_error on failure.
- *   3. Call infer() per frame — throws std::runtime_error on fatal backend error.
+ *   2. Call dsai_load() — throws std::runtime_error on failure.
+ *   3. Call dsai_infer() per frame — throws std::runtime_error on fatal backend error.
  *   4. Destroy (RAII cleanup).
  *
- * All implementations must be thread-safe for concurrent infer() calls IF
+ * All implementations must be thread-safe for concurrent dsai_infer() calls IF
  * the underlying runtime supports it; otherwise document the restriction.
  */
 class IDetector {
@@ -60,7 +60,7 @@ public:
      * @param nmsThres   IoU threshold for NMS (0–1).
      * @throws std::runtime_error with a descriptive message on any failure.
      */
-    virtual void load(const std::string& modelPath,
+    virtual void dsai_load(const std::string& modelPath,
                       float confThres = 0.25f,
                       float nmsThres  = 0.45f) = 0;
 
@@ -71,28 +71,28 @@ public:
      * @return       Detections in original frame coordinates.
      * @throws std::runtime_error on fatal backend error.
      */
-    virtual std::vector<Detection> infer(const cv::Mat& frame) = 0;
+    virtual std::vector<Detection> dsai_infer(const cv::Mat& frame) = 0;
 
     /**
-     * Class labels in index order, populated after load().
+     * Class labels in index order, populated after dsai_load().
      */
-    virtual const std::vector<std::string>& classNames() const = 0;
+    virtual const std::vector<std::string>& dsai_classNames() const = 0;
 
     /**
      * Override class labels after load (e.g. from user-edited config).
      * Replaces the labels read from YAML; numClasses is updated accordingly.
      */
-    virtual void setClassLabels(const std::vector<std::string>& labels) = 0;
+    virtual void dsai_setClassLabels(const std::vector<std::string>& labels) = 0;
 
     /**
-     * Model input spatial size (width × height), populated after load().
+     * Model input spatial size (width × height), populated after dsai_load().
      */
-    virtual cv::Size inputSize() const = 0;
+    virtual cv::Size dsai_inputSize() const = 0;
 
     /**
-     * True after a successful load().
+     * True after a successful dsai_load().
      */
-    virtual bool isLoaded() const = 0;
+    virtual bool dsai_isLoaded() const = 0;
 };
 
 } // namespace inference

@@ -54,72 +54,72 @@ public:
     ~ConfigDialog() override = default;
 
     // Getters — only valid after Accepted
-    QString getModelFilePath() const  { return modelFilePath_; }
-    QString getYamlPath() const       { return yamlFilePath_; }
-    inference::Backend getBackend() const;
-    int     getCameraDeviceId() const { return cameraDeviceId_; }
-    QString getVideoOrRtspPath() const;
-    bool    isUsingVideoFile() const  { return videoFileRadio_->isChecked(); }
-    bool    isUsingRtspStream() const { return rtspRadio_->isChecked(); }
-    int     getFps() const;
-    int     getWidth() const;
-    int     getHeight() const;
-    int     getGain() const       { return gainSpinBox_->value(); }
-    int     getGamma() const      { return gammaSpinBox_->value(); }
-    int     getBrightness() const { return brightnessSpinBox_->value(); }
-    QRect   getRoi() const        { return roi_; }
-    bool    isRoiEnabled() const  { return enableRoiCheckbox_->isChecked(); }
-    bool    isDebugLoggingEnabled()  const { return debugLoggingCheckbox_ && debugLoggingCheckbox_->isChecked(); }
-    bool    isRockchipHardware()    const { return rockchipHwCheckbox_    && rockchipHwCheckbox_->isChecked(); }
-    float        getConfThreshold() const { return confThresSpin_ ? static_cast<float>(confThresSpin_->value()) : 0.25f; }
-    float        getNmsThreshold()  const { return nmsThresSpin_  ? static_cast<float>(nmsThresSpin_->value())  : 0.45f; }
-    QStringList  getClassLabels()   const { return classLabels_; }
+    QString dsai_getModelFilePath() const  { return modelFilePath_; }
+    QString dsai_getYamlPath() const       { return yamlFilePath_; }
+    inference::Backend dsai_getBackend() const;
+    int     dsai_getCameraDeviceId() const { return cameraDeviceId_; }
+    QString dsai_getVideoOrRtspPath() const;
+    bool    dsai_isUsingVideoFile() const  { return videoFileRadio_->isChecked(); }
+    bool    dsai_isUsingRtspStream() const { return rtspRadio_->isChecked(); }
+    int     dsai_getFps() const;
+    int     dsai_getWidth() const;
+    int     dsai_getHeight() const;
+    int     dsai_getGain() const       { return gainSpinBox_->value(); }
+    int     dsai_getGamma() const      { return gammaSpinBox_->value(); }
+    int     dsai_getBrightness() const { return brightnessSpinBox_->value(); }
+    QRect   dsai_getRoi() const        { return roi_; }
+    bool    dsai_isRoiEnabled() const  { return enableRoiCheckbox_->isChecked(); }
+    bool    dsai_isDebugLoggingEnabled()  const { return debugLoggingCheckbox_ && debugLoggingCheckbox_->isChecked(); }
+    bool    dsai_isRockchipHardware()    const { return rockchipHwCheckbox_    && rockchipHwCheckbox_->isChecked(); }
+    float        dsai_getConfThreshold() const { return confThresSpin_ ? static_cast<float>(confThresSpin_->value()) : 0.25f; }
+    float        dsai_getNmsThreshold()  const { return nmsThresSpin_  ? static_cast<float>(nmsThresSpin_->value())  : 0.45f; }
+    QStringList  dsai_getClassLabels()   const { return classLabels_; }
 
 private slots:
-    void browseModelFile();
-    void browseYamlFile();
-    void openClassLabelsEditor();
-    void browseVideoFile();
-    void onSourceChanged();
-    void refreshCameras();
-    void onResolutionChanged(int index);
-    void onGainSliderChanged(int value);
-    void onGainSpinChanged(int value);
-    void onGammaSliderChanged(int value);
-    void onGammaSpinChanged(int value);
-    void onBrightnessSliderChanged(int value);
-    void onBrightnessSpinChanged(int value);
-    void applyV4l2Settings();
-    void clearRoi();
-    void onAccepted();
+    void dsai_browseModelFile();
+    void dsai_browseYamlFile();
+    void dsai_openClassLabelsEditor();
+    void dsai_browseVideoFile();
+    void dsai_onSourceChanged();
+    void dsai_refreshCameras();
+    void dsai_onResolutionChanged(int index);
+    void dsai_onGainSliderChanged(int value);
+    void dsai_onGainSpinChanged(int value);
+    void dsai_onGammaSliderChanged(int value);
+    void dsai_onGammaSpinChanged(int value);
+    void dsai_onBrightnessSliderChanged(int value);
+    void dsai_onBrightnessSpinChanged(int value);
+    void dsai_applyV4l2Settings();
+    void dsai_clearRoi();
+    void dsai_onAccepted();
 
 private:
-    void setupBackendSection(QVBoxLayout* parent);
-    void setupModelSection(QVBoxLayout* parent);
-    void setupSourceSection(QVBoxLayout* parent);
-    void setupCameraSection(QVBoxLayout* parent);
-    void setupVideoFileSection(QVBoxLayout* parent);
-    void setupRtspSection(QVBoxLayout* parent);
-    void setupRockchipSection(QVBoxLayout* parent);
-    void setupResolutionSection(QVBoxLayout* parent);
-    void setupV4l2Section(QVBoxLayout* parent);
-    void setupFpsSection(QVBoxLayout* parent);
-    void setupRoiSection(QVBoxLayout* parent);
-    void setupInfoSection(QVBoxLayout* parent);
-    void setupThresholdsSection(QVBoxLayout* parent);
-    void setupDebugSection(QVBoxLayout* parent);
-    void setupButtonRow(QVBoxLayout* parent);
+    void dsai_setupBackendSection(QVBoxLayout* parent);
+    void dsai_setupModelSection(QVBoxLayout* parent);
+    void dsai_setupSourceSection(QVBoxLayout* parent);
+    void dsai_setupCameraSection(QVBoxLayout* parent);
+    void dsai_setupVideoFileSection(QVBoxLayout* parent);
+    void dsai_setupRtspSection(QVBoxLayout* parent);
+    void dsai_setupRockchipSection(QVBoxLayout* parent);
+    void dsai_setupResolutionSection(QVBoxLayout* parent);
+    void dsai_setupV4l2Section(QVBoxLayout* parent);
+    void dsai_setupFpsSection(QVBoxLayout* parent);
+    void dsai_setupRoiSection(QVBoxLayout* parent);
+    void dsai_setupInfoSection(QVBoxLayout* parent);
+    void dsai_setupThresholdsSection(QVBoxLayout* parent);
+    void dsai_setupDebugSection(QVBoxLayout* parent);
+    void dsai_setupButtonRow(QVBoxLayout* parent);
 
-    static QWidget* makeSeparator();
-    static QHBoxLayout* makeSliderRow(QSlider*& slider, QSpinBox*& spin,
+    static QWidget* dsai_makeSeparator();
+    static QHBoxLayout* dsai_makeSliderRow(QSlider*& slider, QSpinBox*& spin,
                                       int minVal, int maxVal, int defaultVal);
-    void populateCameras();
-    void updateSourceVisibility();
-    void updateInfoPanel();
-    bool validateInputs(QString& errorMsg) const;
-    void loadConfig();
-    void saveConfig();
-    static QString configFilePath();
+    void dsai_populateCameras();
+    void dsai_updateSourceVisibility();
+    void dsai_updateInfoPanel();
+    bool dsai_validateInputs(QString& errorMsg) const;
+    void dsai_loadConfig();
+    void dsai_saveConfig();
+    static QString dsai_configFilePath();
 
     // — Backend section —
     QGroupBox* backendGroup_          = nullptr;

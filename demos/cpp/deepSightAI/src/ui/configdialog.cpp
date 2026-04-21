@@ -114,28 +114,28 @@ ConfigDialog::ConfigDialog(QWidget *parent) : QDialog(parent)
     mainLayout->setSpacing(8);
     mainLayout->setContentsMargins(10, 10, 10, 10);
 
-    setupBackendSection(mainLayout);
-    mainLayout->addWidget(makeSeparator());
-    setupModelSection(mainLayout);
-    mainLayout->addWidget(makeSeparator());
-    setupSourceSection(mainLayout);
-    setupCameraSection(mainLayout);
-    setupVideoFileSection(mainLayout);
-    setupRtspSection(mainLayout);
-    setupRockchipSection(mainLayout);
-    mainLayout->addWidget(makeSeparator());
-    setupResolutionSection(mainLayout);
-    setupFpsSection(mainLayout);
-    mainLayout->addWidget(makeSeparator());
-    setupV4l2Section(mainLayout);
-    mainLayout->addWidget(makeSeparator());
-    setupThresholdsSection(mainLayout);
-    mainLayout->addWidget(makeSeparator());
-    setupRoiSection(mainLayout);
-    mainLayout->addWidget(makeSeparator());
-    setupInfoSection(mainLayout);
-    mainLayout->addWidget(makeSeparator());
-    setupDebugSection(mainLayout);
+    dsai_setupBackendSection(mainLayout);
+    mainLayout->addWidget(dsai_makeSeparator());
+    dsai_setupModelSection(mainLayout);
+    mainLayout->addWidget(dsai_makeSeparator());
+    dsai_setupSourceSection(mainLayout);
+    dsai_setupCameraSection(mainLayout);
+    dsai_setupVideoFileSection(mainLayout);
+    dsai_setupRtspSection(mainLayout);
+    dsai_setupRockchipSection(mainLayout);
+    mainLayout->addWidget(dsai_makeSeparator());
+    dsai_setupResolutionSection(mainLayout);
+    dsai_setupFpsSection(mainLayout);
+    mainLayout->addWidget(dsai_makeSeparator());
+    dsai_setupV4l2Section(mainLayout);
+    mainLayout->addWidget(dsai_makeSeparator());
+    dsai_setupThresholdsSection(mainLayout);
+    mainLayout->addWidget(dsai_makeSeparator());
+    dsai_setupRoiSection(mainLayout);
+    mainLayout->addWidget(dsai_makeSeparator());
+    dsai_setupInfoSection(mainLayout);
+    mainLayout->addWidget(dsai_makeSeparator());
+    dsai_setupDebugSection(mainLayout);
     mainLayout->addStretch();
 
     scroll->setWidget(container);
@@ -143,27 +143,27 @@ ConfigDialog::ConfigDialog(QWidget *parent) : QDialog(parent)
     QVBoxLayout* dialogLayout = new QVBoxLayout(this);
     dialogLayout->setContentsMargins(0, 0, 0, 0);
     dialogLayout->addWidget(scroll);
-    setupButtonRow(dialogLayout);
+    dsai_setupButtonRow(dialogLayout);
 
     // Wire up OK / Cancel
     connect(okButton_,     &QPushButton::clicked, this, &ConfigDialog::onAccepted);
     connect(cancelButton_, &QPushButton::clicked, this, &QDialog::reject);
 
-    loadConfig();
-    updateSourceVisibility();
-    updateInfoPanel();
+    dsai_loadConfig();
+    dsai_updateSourceVisibility();
+    dsai_updateInfoPanel();
 }
 
 // ─── section builders ─────────────────────────────────────────────────────────
 
-inference::Backend ConfigDialog::getBackend() const
+inference::Backend ConfigDialog::dsai_getBackend() const
 {
     if (!backendComboBox_) return inference::Backend::ONNX;
     const int idx = backendComboBox_->currentData().toInt();
     return static_cast<inference::Backend>(idx);
 }
 
-void ConfigDialog::setupBackendSection(QVBoxLayout* parent)
+void ConfigDialog::dsai_setupBackendSection(QVBoxLayout* parent)
 {
     backendGroup_ = new QGroupBox("Inference Backend", this);
     QHBoxLayout* lay = new QHBoxLayout(backendGroup_);
@@ -177,7 +177,7 @@ void ConfigDialog::setupBackendSection(QVBoxLayout* parent)
     {
         const int idx = backendComboBox_->count();
         backendComboBox_->addItem("OpenVINO", static_cast<int>(inference::Backend::OPENVINO));
-        if (!inference::DetectorFactory::isAvailable(inference::Backend::OPENVINO)) {
+        if (!inference::DetectorFactory::dsai_isAvailable(inference::Backend::OPENVINO)) {
             // Grey out the item; Qt doesn't have a built-in disable-item API on all styles,
             // so we mark it via the user data sentinel and protect in validation.
             auto* model = qobject_cast<QStandardItemModel*>(backendComboBox_->model());
@@ -189,7 +189,7 @@ void ConfigDialog::setupBackendSection(QVBoxLayout* parent)
     {
         const int idx = backendComboBox_->count();
         backendComboBox_->addItem("RKNN (RV1106)", static_cast<int>(inference::Backend::RKNN));
-        if (!inference::DetectorFactory::isAvailable(inference::Backend::RKNN)) {
+        if (!inference::DetectorFactory::dsai_isAvailable(inference::Backend::RKNN)) {
             auto* model = qobject_cast<QStandardItemModel*>(backendComboBox_->model());
             if (model) model->item(idx)->setEnabled(false);
         }
@@ -200,7 +200,7 @@ void ConfigDialog::setupBackendSection(QVBoxLayout* parent)
     parent->addWidget(backendGroup_);
 }
 
-void ConfigDialog::setupModelSection(QVBoxLayout* parent)
+void ConfigDialog::dsai_setupModelSection(QVBoxLayout* parent)
 {
     modelGroup_ = new QGroupBox("Model", this);
     QFormLayout* form = new QFormLayout(modelGroup_);
@@ -211,7 +211,7 @@ void ConfigDialog::setupModelSection(QVBoxLayout* parent)
     modelFilePathEdit_->setPlaceholderText("Select model file (.onnx / .xml / .rknn)…");
     connect(backendComboBox_, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, [this](int) {
-        const inference::Backend b = getBackend();
+        const inference::Backend b = dsai_getBackend();
         if (b == inference::Backend::RKNN)
             modelFilePathEdit_->setPlaceholderText("Select RKNN INT8 model (.rknn)…");
         else if (b == inference::Backend::OPENVINO)
@@ -245,7 +245,7 @@ void ConfigDialog::setupModelSection(QVBoxLayout* parent)
     parent->addWidget(modelGroup_);
 }
 
-void ConfigDialog::setupSourceSection(QVBoxLayout* parent)
+void ConfigDialog::dsai_setupSourceSection(QVBoxLayout* parent)
 {
     sourceGroup_ = new QGroupBox("Video Source", this);
     QHBoxLayout* lay = new QHBoxLayout(sourceGroup_);
@@ -266,12 +266,12 @@ void ConfigDialog::setupSourceSection(QVBoxLayout* parent)
     lay->addStretch();
 
     connect(sourceButtonGroup_, QOverload<int>::of(&QButtonGroup::idClicked),
-            this, [this](int){ onSourceChanged(); });
+            this, [this](int){ dsai_onSourceChanged(); });
 
     parent->addWidget(sourceGroup_);
 }
 
-void ConfigDialog::setupCameraSection(QVBoxLayout* parent)
+void ConfigDialog::dsai_setupCameraSection(QVBoxLayout* parent)
 {
     cameraGroup_ = new QGroupBox("Camera Device", this);
     QVBoxLayout* vlay = new QVBoxLayout(cameraGroup_);
@@ -288,10 +288,10 @@ void ConfigDialog::setupCameraSection(QVBoxLayout* parent)
 
     parent->addWidget(cameraGroup_);
 
-    populateCameras();
+    dsai_populateCameras();
 }
 
-void ConfigDialog::setupVideoFileSection(QVBoxLayout* parent)
+void ConfigDialog::dsai_setupVideoFileSection(QVBoxLayout* parent)
 {
     videoFileGroup_ = new QGroupBox("Video File", this);
     QHBoxLayout* lay = new QHBoxLayout(videoFileGroup_);
@@ -307,7 +307,7 @@ void ConfigDialog::setupVideoFileSection(QVBoxLayout* parent)
     parent->addWidget(videoFileGroup_);
 }
 
-void ConfigDialog::setupRtspSection(QVBoxLayout* parent)
+void ConfigDialog::dsai_setupRtspSection(QVBoxLayout* parent)
 {
     rtspGroup_ = new QGroupBox("RTSP Stream", this);
     QHBoxLayout* lay = new QHBoxLayout(rtspGroup_);
@@ -319,7 +319,7 @@ void ConfigDialog::setupRtspSection(QVBoxLayout* parent)
     parent->addWidget(rtspGroup_);
 }
 
-void ConfigDialog::setupRockchipSection(QVBoxLayout* parent)
+void ConfigDialog::dsai_setupRockchipSection(QVBoxLayout* parent)
 {
     rockchipHwCheckbox_ = new QCheckBox("Rockchip Hardware", this);
     rockchipHwCheckbox_->setToolTip(
@@ -329,7 +329,7 @@ void ConfigDialog::setupRockchipSection(QVBoxLayout* parent)
     parent->addWidget(rockchipHwCheckbox_);
 }
 
-void ConfigDialog::setupResolutionSection(QVBoxLayout* parent)
+void ConfigDialog::dsai_setupResolutionSection(QVBoxLayout* parent)
 {
     resolutionGroup_ = new QGroupBox("Resolution", this);
     QHBoxLayout* lay = new QHBoxLayout(resolutionGroup_);
@@ -350,7 +350,7 @@ void ConfigDialog::setupResolutionSection(QVBoxLayout* parent)
     parent->addWidget(resolutionGroup_);
 }
 
-void ConfigDialog::setupFpsSection(QVBoxLayout* parent)
+void ConfigDialog::dsai_setupFpsSection(QVBoxLayout* parent)
 {
     fpsGroup_ = new QGroupBox("Target FPS", this);
     QHBoxLayout* lay = new QHBoxLayout(fpsGroup_);
@@ -368,7 +368,7 @@ void ConfigDialog::setupFpsSection(QVBoxLayout* parent)
     parent->addWidget(fpsGroup_);
 }
 
-void ConfigDialog::setupV4l2Section(QVBoxLayout* parent)
+void ConfigDialog::dsai_setupV4l2Section(QVBoxLayout* parent)
 {
     v4l2ControlsGroup_ = new QGroupBox("Camera Controls (V4L2)", this);
     QFormLayout* form = new QFormLayout(v4l2ControlsGroup_);
@@ -376,7 +376,7 @@ void ConfigDialog::setupV4l2Section(QVBoxLayout* parent)
     auto makeRow = [&](const QString& label, QSlider*& slider, QSpinBox*& spin,
                        int minVal, int maxVal, int defaultVal)
     {
-        QHBoxLayout* row = makeSliderRow(slider, spin, minVal, maxVal, defaultVal);
+        QHBoxLayout* row = dsai_makeSliderRow(slider, spin, minVal, maxVal, defaultVal);
         form->addRow(label, row);
     };
 
@@ -402,7 +402,7 @@ void ConfigDialog::setupV4l2Section(QVBoxLayout* parent)
     parent->addWidget(v4l2ControlsGroup_);
 }
 
-void ConfigDialog::setupThresholdsSection(QVBoxLayout* parent)
+void ConfigDialog::dsai_setupThresholdsSection(QVBoxLayout* parent)
 {
     thresholdsGroup_ = new QGroupBox("Detection Thresholds", this);
     QFormLayout* form = new QFormLayout(thresholdsGroup_);
@@ -428,7 +428,7 @@ void ConfigDialog::setupThresholdsSection(QVBoxLayout* parent)
     parent->addWidget(thresholdsGroup_);
 }
 
-void ConfigDialog::setupRoiSection(QVBoxLayout* parent)
+void ConfigDialog::dsai_setupRoiSection(QVBoxLayout* parent)
 {
     roiGroup_ = new QGroupBox("Region of Interest (ROI)", this);
     QVBoxLayout* vlay = new QVBoxLayout(roiGroup_);
@@ -446,7 +446,7 @@ void ConfigDialog::setupRoiSection(QVBoxLayout* parent)
     parent->addWidget(roiGroup_);
 }
 
-void ConfigDialog::setupInfoSection(QVBoxLayout* parent)
+void ConfigDialog::dsai_setupInfoSection(QVBoxLayout* parent)
 {
     infoGroup_ = new QGroupBox("Information", this);
     QVBoxLayout* vlay = new QVBoxLayout(infoGroup_);
@@ -459,7 +459,7 @@ void ConfigDialog::setupInfoSection(QVBoxLayout* parent)
     parent->addWidget(infoGroup_);
 }
 
-void ConfigDialog::setupDebugSection(QVBoxLayout* parent)
+void ConfigDialog::dsai_setupDebugSection(QVBoxLayout* parent)
 {
     debugGroup_ = new QGroupBox("Diagnostics", this);
     QVBoxLayout* vlay = new QVBoxLayout(debugGroup_);
@@ -473,7 +473,7 @@ void ConfigDialog::setupDebugSection(QVBoxLayout* parent)
     parent->addWidget(debugGroup_);
 }
 
-void ConfigDialog::setupButtonRow(QVBoxLayout* parent)
+void ConfigDialog::dsai_setupButtonRow(QVBoxLayout* parent)
 {
     QHBoxLayout* row = new QHBoxLayout();
     row->setContentsMargins(10, 6, 10, 10);
@@ -490,7 +490,7 @@ void ConfigDialog::setupButtonRow(QVBoxLayout* parent)
 
 // ─── static helpers ───────────────────────────────────────────────────────────
 
-QWidget* ConfigDialog::makeSeparator()
+QWidget* ConfigDialog::dsai_makeSeparator()
 {
     QFrame* line = new QFrame();
     line->setFrameShape(QFrame::HLine);
@@ -498,7 +498,7 @@ QWidget* ConfigDialog::makeSeparator()
     return line;
 }
 
-QHBoxLayout* ConfigDialog::makeSliderRow(QSlider*& slider, QSpinBox*& spin,
+QHBoxLayout* ConfigDialog::dsai_makeSliderRow(QSlider*& slider, QSpinBox*& spin,
                                           int minVal, int maxVal, int defaultVal)
 {
     QHBoxLayout* row = new QHBoxLayout();
@@ -518,7 +518,7 @@ QHBoxLayout* ConfigDialog::makeSliderRow(QSlider*& slider, QSpinBox*& spin,
 
 // ─── internal helpers ─────────────────────────────────────────────────────────
 
-void ConfigDialog::populateCameras()
+void ConfigDialog::dsai_populateCameras()
 {
     cameraComboBox_->clear();
     availableCameraIds_.clear();
@@ -538,7 +538,7 @@ void ConfigDialog::populateCameras()
     }
 }
 
-void ConfigDialog::updateSourceVisibility()
+void ConfigDialog::dsai_updateSourceVisibility()
 {
     const bool isCamera    = cameraRadio_->isChecked();
     const bool isVideoFile = videoFileRadio_->isChecked();
@@ -564,7 +564,7 @@ void ConfigDialog::updateSourceVisibility()
     adjustSize();
 }
 
-void ConfigDialog::updateInfoPanel()
+void ConfigDialog::dsai_updateInfoPanel()
 {
     if (!infoTextBrowser_)
         return;
@@ -591,7 +591,7 @@ void ConfigDialog::updateInfoPanel()
     if (res.isValid() && !res.isNull())
         lines << QString("Resolution: %1 × %2").arg(res.width()).arg(res.height());
 
-    const int fps = getFps();
+    const int fps = dsai_getFps();
     lines << QString("FPS: %1").arg(fps < 0 ? "Max" : QString::number(fps));
 
     if (enableRoiCheckbox_->isChecked() && roi_.isValid())
@@ -602,7 +602,7 @@ void ConfigDialog::updateInfoPanel()
     infoTextBrowser_->setHtml(lines.join("<br>"));
 }
 
-bool ConfigDialog::validateInputs(QString& errorMsg) const
+bool ConfigDialog::dsai_validateInputs(QString& errorMsg) const
 {
     if (modelFilePath_.isEmpty()) {
         errorMsg = "Please select an ONNX model file.";
@@ -644,7 +644,7 @@ bool ConfigDialog::validateInputs(QString& errorMsg) const
 
 // ─── getters ──────────────────────────────────────────────────────────────────
 
-QString ConfigDialog::getVideoOrRtspPath() const
+QString ConfigDialog::dsai_getVideoOrRtspPath() const
 {
     if (videoFileRadio_->isChecked())
         return videoFilePathEdit_->text().trimmed();
@@ -653,7 +653,7 @@ QString ConfigDialog::getVideoOrRtspPath() const
     return {};
 }
 
-int ConfigDialog::getFps() const
+int ConfigDialog::dsai_getFps() const
 {
     if (!fpsComboBox_)
         return 30;
@@ -661,7 +661,7 @@ int ConfigDialog::getFps() const
     return v.isValid() ? v.toInt() : 30;
 }
 
-int ConfigDialog::getWidth() const
+int ConfigDialog::dsai_getWidth() const
 {
     if (!resolutionComboBox_)
         return 640;
@@ -669,7 +669,7 @@ int ConfigDialog::getWidth() const
     return (s.isValid() && s.width() > 0) ? s.width() : 640;
 }
 
-int ConfigDialog::getHeight() const
+int ConfigDialog::dsai_getHeight() const
 {
     if (!resolutionComboBox_)
         return 480;
@@ -679,9 +679,9 @@ int ConfigDialog::getHeight() const
 
 // ─── slots ────────────────────────────────────────────────────────────────────
 
-void ConfigDialog::browseModelFile()
+void ConfigDialog::dsai_browseModelFile()
 {
-    const inference::Backend backend = getBackend();
+    const inference::Backend backend = dsai_getBackend();
 
     QString filter, title;
     switch (backend) {
@@ -729,10 +729,10 @@ void ConfigDialog::browseModelFile()
         }
     }
 
-    updateInfoPanel();
+    dsai_updateInfoPanel();
 }
 
-void ConfigDialog::browseYamlFile()
+void ConfigDialog::dsai_browseYamlFile()
 {
     const QString path = QFileDialog::getOpenFileName(
         this,
@@ -751,17 +751,17 @@ void ConfigDialog::browseYamlFile()
 
     yamlFilePath_ = path;
     yamlFilePathEdit_->setText(path);
-    updateInfoPanel();
+    dsai_updateInfoPanel();
 }
 
-void ConfigDialog::openClassLabelsEditor()
+void ConfigDialog::dsai_openClassLabelsEditor()
 {
     ClassLabelsDialog dlg(classLabels_, yamlFilePathEdit_->text().trimmed(), this);
     if (dlg.exec() == QDialog::Accepted)
-        classLabels_ = dlg.getClassLabels();
+        classLabels_ = dlg.dsai_getClassLabels();
 }
 
-void ConfigDialog::browseVideoFile()
+void ConfigDialog::dsai_browseVideoFile()
 {
     const QString path = QFileDialog::getOpenFileName(
         this,
@@ -779,65 +779,65 @@ void ConfigDialog::browseVideoFile()
     }
 
     videoFilePathEdit_->setText(path);
-    updateInfoPanel();
+    dsai_updateInfoPanel();
 }
 
-void ConfigDialog::onSourceChanged()
+void ConfigDialog::dsai_onSourceChanged()
 {
-    updateSourceVisibility();
-    updateInfoPanel();
+    dsai_updateSourceVisibility();
+    dsai_updateInfoPanel();
 }
 
-void ConfigDialog::refreshCameras()
+void ConfigDialog::dsai_refreshCameras()
 {
-    populateCameras();
-    updateInfoPanel();
+    dsai_populateCameras();
+    dsai_updateInfoPanel();
 }
 
-void ConfigDialog::onResolutionChanged(int /*index*/)
+void ConfigDialog::dsai_onResolutionChanged(int /*index*/)
 {
-    updateInfoPanel();
+    dsai_updateInfoPanel();
 }
 
 // Slider ↔ spin sync — use blockSignals to avoid infinite recursion
-void ConfigDialog::onGainSliderChanged(int value)
+void ConfigDialog::dsai_onGainSliderChanged(int value)
 {
     gainSpinBox_->blockSignals(true);
     gainSpinBox_->setValue(value);
     gainSpinBox_->blockSignals(false);
 }
-void ConfigDialog::onGainSpinChanged(int value)
+void ConfigDialog::dsai_onGainSpinChanged(int value)
 {
     gainSlider_->blockSignals(true);
     gainSlider_->setValue(value);
     gainSlider_->blockSignals(false);
 }
-void ConfigDialog::onGammaSliderChanged(int value)
+void ConfigDialog::dsai_onGammaSliderChanged(int value)
 {
     gammaSpinBox_->blockSignals(true);
     gammaSpinBox_->setValue(value);
     gammaSpinBox_->blockSignals(false);
 }
-void ConfigDialog::onGammaSpinChanged(int value)
+void ConfigDialog::dsai_onGammaSpinChanged(int value)
 {
     gammaSlider_->blockSignals(true);
     gammaSlider_->setValue(value);
     gammaSlider_->blockSignals(false);
 }
-void ConfigDialog::onBrightnessSliderChanged(int value)
+void ConfigDialog::dsai_onBrightnessSliderChanged(int value)
 {
     brightnessSpinBox_->blockSignals(true);
     brightnessSpinBox_->setValue(value);
     brightnessSpinBox_->blockSignals(false);
 }
-void ConfigDialog::onBrightnessSpinChanged(int value)
+void ConfigDialog::dsai_onBrightnessSpinChanged(int value)
 {
     brightnessSlider_->blockSignals(true);
     brightnessSlider_->setValue(value);
     brightnessSlider_->blockSignals(false);
 }
 
-void ConfigDialog::applyV4l2Settings()
+void ConfigDialog::dsai_applyV4l2Settings()
 {
     if (!cameraRadio_->isChecked()) {
         QMessageBox::information(this, "V4L2 Controls",
@@ -886,22 +886,22 @@ void ConfigDialog::applyV4l2Settings()
     }
 }
 
-void ConfigDialog::clearRoi()
+void ConfigDialog::dsai_clearRoi()
 {
     roi_ = QRect();
     roiInfoLabel_->setText("No ROI set — draw one in Edit mode after closing this dialog.");
-    updateInfoPanel();
+    dsai_updateInfoPanel();
 }
 
-void ConfigDialog::onAccepted()
+void ConfigDialog::dsai_onAccepted()
 {
     // Validate selected backend is actually available
-    const inference::Backend backend = getBackend();
-    if (!inference::DetectorFactory::isAvailable(backend)) {
+    const inference::Backend backend = dsai_getBackend();
+    if (!inference::DetectorFactory::dsai_isAvailable(backend)) {
         QMessageBox::warning(this, "Backend Unavailable",
             QString("The selected backend '%1' was not compiled into this binary.\n"
                     "Please select a different backend.")
-            .arg(inference::DetectorFactory::name(backend)));
+            .arg(inference::DetectorFactory::dsai_name(backend)));
         return;
     }
 
@@ -916,29 +916,29 @@ void ConfigDialog::onAccepted()
     yamlFilePath_ = yamlFilePathEdit_->text().trimmed();
 
     QString errorMsg;
-    if (!validateInputs(errorMsg)) {
+    if (!dsai_validateInputs(errorMsg)) {
         QMessageBox::warning(this, "Configuration Error", errorMsg);
         return;   // Keep dialog open
     }
 
-    saveConfig();
+    dsai_saveConfig();
     accept();
 }
 
 // ─── config persistence ───────────────────────────────────────────────────────
 
-QString ConfigDialog::configFilePath()
+QString ConfigDialog::dsai_configFilePath()
 {
     const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
     QDir().mkpath(dir);
     return dir + "/config.yaml";
 }
 
-void ConfigDialog::saveConfig()
+void ConfigDialog::dsai_saveConfig()
 {
     AppConfig cfg;
 
-    cfg.backend          = getBackend();
+    cfg.backend          = dsai_getBackend();
     cfg.modelFile        = modelFilePath_.toStdString();
     cfg.yamlFile         = yamlFilePath_.toStdString();
     cfg.source           = static_cast<SourceType>(sourceButtonGroup_->checkedId());
@@ -967,22 +967,22 @@ void ConfigDialog::saveConfig()
     }
 
     try {
-        cfg.saveToFile(configFilePath().toStdString());
-        qDebug() << "ConfigDialog: saved config to" << configFilePath();
+        cfg.saveToFile(dsai_configFilePath().toStdString());
+        qDebug() << "ConfigDialog: saved config to" << dsai_configFilePath();
     } catch (const std::exception& e) {
         qWarning() << "ConfigDialog: failed to save config:" << e.what();
     }
 }
 
 
-void ConfigDialog::loadConfig()
+void ConfigDialog::dsai_loadConfig()
 {
-    const std::string path = configFilePath().toStdString();
+    const std::string path = dsai_configFilePath().toStdString();
     if (!std::filesystem::exists(path)) return;
 
     AppConfig cfg;
     try {
-        cfg = AppConfig::loadFromFile(path);
+        cfg = AppConfig::dsai_loadFromFile(path);
     }
     catch (const std::exception& e) {
         qWarning() << "ConfigDialog: failed to load config:" << e.what();

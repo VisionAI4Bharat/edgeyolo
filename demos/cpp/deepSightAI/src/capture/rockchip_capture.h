@@ -26,23 +26,23 @@
  *
  * Two modes
  * =========
- * openCamera()  — MIPI / ISP camera via Rockchip RK MPI VI pipeline.
+ * dsai_openCamera()  — MIPI / ISP camera via Rockchip RK MPI VI pipeline.
  *                 Full ISP pipeline (RKAIQ) + YUV420SP → BGR.
  *                 Requires WITH_RKNN build flag + LUCKFOX_SDK_ROOT.
  *
- * openRtsp()    — Network RTSP / RTMP stream via OpenCV / ffmpeg.
+ * dsai_openRtsp()    — Network RTSP / RTMP stream via OpenCV / ffmpeg.
  *                 Works on any platform.  Hardware VDEC (RK_MPI_VDEC) can
  *                 be substituted here in a future revision without changing
  *                 the public API.
  *
  * Fallback
  * ========
- * When built without WITH_RKNN, openCamera() falls back to cv::VideoCapture
+ * When built without WITH_RKNN, dsai_openCamera() falls back to cv::VideoCapture
  * (V4L2) so the same source tree compiles on a desktop for development.
  *
  * Thread safety
  * =============
- * read() is safe to call from a single dedicated capture thread.
+ * dsai_read() is safe to call from a single dedicated capture thread.
  * All other methods must be called from the owning thread.
  */
 #pragma once
@@ -88,15 +88,15 @@ public:
      * Initialises RKAIQ ISP, RK MPI system, VI device and VI channel.
      * @return true on success.
      */
-    bool openCamera(const CameraConfig& cfg);
+    bool dsai_openCamera(const CameraConfig& cfg);
 
     /**
      * Open a network RTSP / RTMP stream.
      * @return true on success.
      */
-    bool openRtsp(const RtspConfig& cfg);
+    bool dsai_openRtsp(const RtspConfig& cfg);
 
-    bool isOpened() const noexcept;
+    bool dsai_isOpened() const noexcept;
 
     /**
      * Capture the next frame.
@@ -104,22 +104,22 @@ public:
      * Camera path (WITH_RKNN): blocks until the VI hardware delivers a new
      * YUV420SP frame, converts in-place to BGR, then deep-copies to bgrFrame.
      *
-     * RTSP / fallback path: delegates to cv::VideoCapture::read().
+     * RTSP / fallback path: delegates to cv::VideoCapture::dsai_read().
      *
      * @param bgrFrame  Receives a BGR CV_8UC3 Mat.
      * @return true on success; false on error or end-of-stream.
      */
-    bool read(cv::Mat& bgrFrame);
+    bool dsai_read(cv::Mat& bgrFrame);
 
     /** Release hardware resources and close the source. */
-    void release();
+    void dsai_release();
 
-    int    captureWidth()  const noexcept;
-    int    captureHeight() const noexcept;
-    double captureFps()    const noexcept;
+    int    dsai_captureWidth()  const noexcept;
+    int    dsai_captureHeight() const noexcept;
+    double dsai_captureFps()    const noexcept;
 
     /** Human-readable description of the last error, or empty string. */
-    std::string lastError() const;
+    std::string dsai_lastError() const;
 
     // Opaque implementation — defined only in rockchip_capture.cpp.
     // Public so static helper functions in the .cpp can name it without

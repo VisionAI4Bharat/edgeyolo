@@ -55,7 +55,7 @@ std::vector<float> mat2blob(const cv::Mat& letterboxed, int H, int W)
 
 // ─── load ────────────────────────────────────────────────────────────────────
 
-void OpenVinoDetector::load(const std::string& modelPath, float confThres, float nmsThres)
+void OpenVinoDetector::dsai_load(const std::string& modelPath, float confThres, float nmsThres)
 {
     if (modelPath.empty())
         throw std::runtime_error("OpenVinoDetector: model path is empty");
@@ -147,13 +147,13 @@ void OpenVinoDetector::loadYaml(const std::string& modelPath)
 
 // ─── infer ───────────────────────────────────────────────────────────────────
 
-std::vector<Detection> OpenVinoDetector::infer(const cv::Mat& frame)
+std::vector<Detection> OpenVinoDetector::dsai_infer(const cv::Mat& frame)
 {
     if (!loaded_)
-        throw std::runtime_error("OpenVinoDetector: call load() before infer()");
+        throw std::runtime_error("OpenVinoDetector: call dsai_load() before dsai_infer()");
 
     if (frame.empty())
-        throw std::runtime_error("OpenVinoDetector: infer() called with empty frame");
+        throw std::runtime_error("OpenVinoDetector: dsai_infer() called with empty frame");
 
     cv::Mat bgrFrame;
     if (frame.channels() == 4)
@@ -177,7 +177,7 @@ std::vector<Detection> OpenVinoDetector::infer(const cv::Mat& frame)
     inferRequest_.set_input_tensor(inputTensor);
 
     try {
-        inferRequest_.infer();
+        inferRequest_.dsai_infer();
     }
     catch (const ov::Exception& e) {
         throw std::runtime_error(

@@ -38,7 +38,7 @@
 // Component tag used with the shared DBG_LOG / ERR_LOG macros.
 #define VW_TAG "VideoWidget"
 
-void VideoWidget::setDebugLogging(bool enabled) { Debug::setEnabled(enabled); }
+void VideoWidget::dsai_setDebugLogging(bool enabled) { Debug::setEnabled(enabled); }
 
 VideoWidget::VideoWidget(QWidget *parent) : QWidget(parent),
     running_(false),
@@ -54,34 +54,34 @@ VideoWidget::VideoWidget(QWidget *parent) : QWidget(parent),
     logoPixmap_.load(":/assets/logo.png");
 
     // Start video capture thread
-    startCaptureThread();
+    dsai_startCaptureThread();
 }
 
 VideoWidget::~VideoWidget() {
-    stopCaptureThread();
+    dsai_stopCaptureThread();
 }
 
-void VideoWidget::setCameraDevice(int deviceId) {
-    stopCaptureThread();
+void VideoWidget::dsai_setCameraDevice(int deviceId) {
+    dsai_stopCaptureThread();
     videoSourcePath_.clear();
     cameraDeviceId_ = deviceId;
-    startCaptureThread();
+    dsai_startCaptureThread();
 }
 
-void VideoWidget::setVideoSource(const QString& path) {
-    stopCaptureThread();
+void VideoWidget::dsai_setVideoSource(const QString& path) {
+    dsai_stopCaptureThread();
     videoSourcePath_ = path;
-    startCaptureThread();
+    dsai_startCaptureThread();
 }
 
-void VideoWidget::setEditMode(bool editMode) {
+void VideoWidget::dsai_setEditMode(bool editMode) {
     isEditMode_ = editMode;
     if (!isEditMode_)
         isDrawingBox_ = false;  // stop in-progress draw; preserve completed ROI
     update();
 }
 
-void VideoWidget::setBoundingBox(const QRect& box) {
+void VideoWidget::dsai_setBoundingBox(const QRect& box) {
     {
         QMutexLocker locker(&frameMutex_);
         boundingBox_ = box;
@@ -89,12 +89,12 @@ void VideoWidget::setBoundingBox(const QRect& box) {
     update(); // Trigger repaint
 }
 
-QRect VideoWidget::getBoundingBox() const {
+QRect VideoWidget::dsai_getBoundingBox() const {
     QMutexLocker locker(&frameMutex_);
     return boundingBox_;
 }
 
-void VideoWidget::setDetectionResults(const QVector<QRect>& boxes,
+void VideoWidget::dsai_setDetectionResults(const QVector<QRect>& boxes,
                                      const QVector<int>& classIds,
                                      const QVector<float>& confidences) {
     {
@@ -106,13 +106,13 @@ void VideoWidget::setDetectionResults(const QVector<QRect>& boxes,
     update(); // Trigger repaint
 }
 
-void VideoWidget::setClassNames(const QStringList& names)
+void VideoWidget::dsai_setClassNames(const QStringList& names)
 {
     QMutexLocker locker(&resultsMutex_);
     classNames_ = names;
 }
 
-void VideoWidget::loadRoiFromConfig(const QString& configPath)
+void VideoWidget::dsai_loadRoiFromConfig(const QString& configPath)
 {
     if (configPath.isEmpty()) return;
 
@@ -167,7 +167,7 @@ void VideoWidget::loadRoiFromConfig(const QString& configPath)
     }
 }
 
-void VideoWidget::saveRoiToConfig(const QString& configPath)
+void VideoWidget::dsai_saveRoiToConfig(const QString& configPath)
 {
     if (configPath.isEmpty())
         throw std::runtime_error("VideoWidget::saveRoiToConfig: config path is empty");
@@ -222,7 +222,7 @@ void VideoWidget::saveRoiToConfig(const QString& configPath)
         box.x(), box.y(), box.width(), box.height(), path.c_str());
 }
 
-void VideoWidget::updateFrame() {
+void VideoWidget::dsai_updateFrame() {
     cv::Mat frame;
     {
         QMutexLocker locker(&frameMutex_);
@@ -329,7 +329,7 @@ void VideoWidget::updateFrame() {
     QMetaObject::invokeMethod(this, "update", Qt::QueuedConnection);
 }
 
-void VideoWidget::startCaptureThread() {
+void VideoWidget::dsai_startCaptureThread() {
     running_ = true;
     const int     camId  = cameraDeviceId_;
     const QString vsPath = videoSourcePath_;
@@ -348,24 +348,24 @@ void VideoWidget::startCaptureThread() {
             if (vsPath.isEmpty()) {
                 deepSightAI::RockchipCapture::CameraConfig cfg;
                 cfg.devId = camId;
-                opened = rkcap.openCamera(cfg);
+                opened = rkcap.dsai_openCamera(cfg);
                 if (opened)
                     DBG_LOG(VW_TAG, "RockchipCapture camera %d  %dx%d @ %.0ffps\n",
-                        camId, rkcap.captureWidth(), rkcap.captureHeight(),
-                        rkcap.captureFps());
+                        camId, rkcap.dsai_captureWidth(), rkcap.dsai_captureHeight(),
+                        rkcap.dsai_captureFps());
             } else {
                 deepSightAI::RockchipCapture::RtspConfig cfg;
                 cfg.url = vsPath.toStdString();
-                opened = rkcap.openRtsp(cfg);
+                opened = rkcap.dsai_openRtsp(cfg);
                 if (opened)
                     DBG_LOG(VW_TAG, "RockchipCapture RTSP '%s'  %dx%d @ %.2ffps\n",
-                        cfg.url.c_str(), rkcap.captureWidth(), rkcap.captureHeight(),
-                        rkcap.captureFps());
+                        cfg.url.c_str(), rkcap.dsai_captureWidth(), rkcap.dsai_captureHeight(),
+                        rkcap.dsai_captureFps());
             }
 
             if (!opened) {
                 ERR_LOG(VW_TAG, "RockchipCapture failed: %s\n",
-                    rkcap.lastError().c_str());
+                    rkcap.dsai_lastError().c_str());
                 return;
             }
 
@@ -375,7 +375,7 @@ void VideoWidget::startCaptureThread() {
 
             while (running_) {
                 cv::Mat frame;
-                if (!rkcap.read(frame) || frame.empty()) {
+                if (!rkcap.dsai_read(frame) || frame.empty()) {
                     ERR_LOG(VW_TAG, "RockchipCapture::read failed — retrying\n");
                     QThread::msleep(10);
                     continue;
@@ -386,7 +386,7 @@ void VideoWidget::startCaptureThread() {
                     currentFrame_ = frame.clone();
                 }
                 emit frameReady(frame);
-                updateFrame();
+                dsai_updateFrame();
 
                 if (frameN % 90 == 0)
                     DBG_LOG(VW_TAG, "Rockchip heartbeat: frame %llu\n",
@@ -398,7 +398,7 @@ void VideoWidget::startCaptureThread() {
                 QThread::msleep(1);
             }
 
-            rkcap.release();
+            rkcap.dsai_release();
             DBG_LOG(VW_TAG, "Rockchip capture thread exited after %llu frames\n",
                 static_cast<unsigned long long>(frameN));
             return;
@@ -408,13 +408,13 @@ void VideoWidget::startCaptureThread() {
 #ifdef HAVE_OPENCV_VIDEOIO
         if (vsPath.isEmpty()) {
             capture_.open(camId, cv::CAP_V4L2);
-            if (!capture_.isOpened())
+            if (!capture_.dsai_isOpened())
                 capture_.open(camId);
         } else {
             capture_.open(vsPath.toStdString());
         }
 
-        if (!capture_.isOpened()) {
+        if (!capture_.dsai_isOpened()) {
             ERR_LOG(VW_TAG, "failed to open source: %s\n",
                 vsPath.isEmpty()
                     ? QString("camera %1").arg(camId).toStdString().c_str()
@@ -450,7 +450,7 @@ void VideoWidget::startCaptureThread() {
             const auto frameStart = Clock::now();
 
             cv::Mat frame;
-            if (!capture_.read(frame) || frame.empty()) {
+            if (!capture_.dsai_read(frame) || frame.empty()) {
                 if (!vsPath.isEmpty()) {
                     DBG_LOG(VW_TAG, "end of file, looping back (frame %llu)\n",
                         static_cast<unsigned long long>(frameN));
@@ -468,7 +468,7 @@ void VideoWidget::startCaptureThread() {
                 currentFrame_ = frame.clone();
             }
             emit frameReady(frame);
-            updateFrame();
+            dsai_updateFrame();
 
             if (frameN % 90 == 0)
                 DBG_LOG(VW_TAG, "capture heartbeat: frame %llu\n",
@@ -481,7 +481,7 @@ void VideoWidget::startCaptureThread() {
                 QThread::msleep(static_cast<unsigned long>(sleepMs));
         }
 
-        capture_.release();
+        capture_.dsai_release();
         DBG_LOG(VW_TAG, "capture thread exited after %llu frames\n",
             static_cast<unsigned long long>(frameN));
 #else
@@ -491,7 +491,7 @@ void VideoWidget::startCaptureThread() {
     captureThread_->start();
 }
 
-void VideoWidget::stopCaptureThread() {
+void VideoWidget::dsai_stopCaptureThread() {
     running_ = false;
     frameCondition_.wakeOne();
     if (captureThread_) {
@@ -546,7 +546,7 @@ void VideoWidget::mousePressEvent(QMouseEvent *event) {
 
     // Convert widget coordinates to image coordinates
     QPointF widgetPos = event->position();
-    QPointF imagePos = widgetToImageCoordinates(widgetPos);
+    QPointF imagePos = dsai_widgetToImageCoordinates(widgetPos);
 
     isDrawingBox_ = true;
     boxStartPoint_   = imagePos.toPoint();
@@ -566,7 +566,7 @@ void VideoWidget::mouseMoveEvent(QMouseEvent *event) {
     }
 
     QPointF widgetPos = event->position();
-    QPointF imagePos = widgetToImageCoordinates(widgetPos);
+    QPointF imagePos = dsai_widgetToImageCoordinates(widgetPos);
     boxCurrentPoint_ = imagePos.toPoint();
 
     const int x = std::min(boxStartPoint_.x(), boxCurrentPoint_.x());
@@ -592,7 +592,7 @@ void VideoWidget::mouseReleaseEvent(QMouseEvent *event) {
 
     // Finalise bounding box
     const QPointF widgetPos = event->position();
-    const QPointF imagePos  = widgetToImageCoordinates(widgetPos);
+    const QPointF imagePos  = dsai_widgetToImageCoordinates(widgetPos);
     boxCurrentPoint_ = imagePos.toPoint();
 
     const int x = std::min(boxStartPoint_.x(), boxCurrentPoint_.x());
@@ -612,7 +612,7 @@ void VideoWidget::mouseReleaseEvent(QMouseEvent *event) {
     update();
 }
 
-QPointF VideoWidget::widgetToImageCoordinates(const QPointF& widgetPos) {
+QPointF VideoWidget::dsai_widgetToImageCoordinates(const QPointF& widgetPos) {
     // qtPixmap_ and lastFrameSize_ are only written in paintEvent() — GUI thread — so
     // reading them here (also GUI thread, mouse events) needs no extra locking.
     if (qtPixmap_.isNull() || lastFrameSize_.isEmpty())

@@ -38,24 +38,24 @@ HeadlessApp::HeadlessApp(const std::string& configPath)
     : configPath_(configPath.empty() ? AppConfig::defaultPath() : configPath)
 {
     try {
-        cfg_ = AppConfig::loadFromFile(configPath_);
+        cfg_ = AppConfig::dsai_loadFromFile(configPath_);
     } catch (const std::exception& e) {
         fprintf(stderr, "[HeadlessApp] Config load failed (%s), using defaults.\n", e.what());
     }
 }
 
-HeadlessApp::~HeadlessApp() { stop(); }
+HeadlessApp::~HeadlessApp() { dsai_stop(); }
 
-void HeadlessApp::stop()    { running_ = false; }
-void HeadlessApp::requestRestart() { restart_ = true; running_ = false; }
+void HeadlessApp::dsai_stop()    { running_ = false; }
+void HeadlessApp::dsai_requestRestart() { restart_ = true; running_ = false; }
 
-void HeadlessApp::applyAndRestart(const AppConfig& newCfg) {
+void HeadlessApp::dsai_applyAndRestart(const AppConfig& newCfg) {
     cfg_ = newCfg;
     try { cfg_.saveToFile(configPath_); }
     catch (const std::exception& e) {
         fprintf(stderr, "[HeadlessApp] Config save failed: %s\n", e.what());
     }
-    requestRestart();
+    dsai_requestRestart();
 }
 
 // ─── inference loop ───────────────────────────────────────────────────────────
@@ -64,12 +64,12 @@ int HeadlessApp::run() {
     running_ = true;
     restart_ = false;
 
-    runInferenceLoop();
+    dsai_runInferenceLoop();
 
     return restart_.load() ? 1 : 0;
 }
 
-void HeadlessApp::runInferenceLoop() {
+void HeadlessApp::dsai_runInferenceLoop() {
     // ── open capture source ──────────────────────────────────────────────
     deepSightAI::RockchipCapture cap;
     bool opened = false;
@@ -79,9 +79,9 @@ void HeadlessApp::runInferenceLoop() {
         rc.url           = cfg_.rtspUrl;
         rc.openTimeoutMs = 8000;
         rc.readTimeoutMs = 15000;
-        opened = cap.openRtsp(rc);
+        opened = cap.dsai_openRtsp(rc);
         if (!opened)
-            fprintf(stderr, "[HeadlessApp] RTSP open failed: %s\n", cap.lastError().c_str());
+            fprintf(stderr, "[HeadlessApp] RTSP open failed: %s\n", cap.dsai_lastError().c_str());
     }
 
     if (!opened) {
@@ -89,17 +89,17 @@ void HeadlessApp::runInferenceLoop() {
         cc.devId  = cfg_.cameraDeviceId;
         cc.width  = cfg_.width();
         cc.height = cfg_.height();
-        cc.fps    = static_cast<double>(cfg_.fps());
+        cc.fps    = static_cast<double>(cfg_ .fps());
         cc.iqDir  = cfg_.iqDir;
-        opened = cap.openCamera(cc);
+        opened = cap.dsai_openCamera(cc);
         if (!opened) {
-            fprintf(stderr, "[HeadlessApp] Camera open failed: %s\n", cap.lastError().c_str());
+            fprintf(stderr, "[HeadlessApp] Camera open failed: %s\n", cap.dsai_lastError().c_str());
             return;
         }
     }
 
     printf("[HeadlessApp] Capture open: %dx%d @ %.0ffps\n",
-           cap.captureWidth(), cap.captureHeight(), cap.captureFps());
+           cap.dsai_captureWidth(), cap.dsai_captureHeight(), cap.dsai_captureFps());
 
     // ── load detector ────────────────────────────────────────────────────
     if (cfg_.modelFile.empty()) {
@@ -115,7 +115,7 @@ void HeadlessApp::runInferenceLoop() {
             case Backend::OpenVINO: detBackend = inference::Backend::OPENVINO; break;
             default:               detBackend = inference::Backend::ONNX;    break;
         }
-        detector = inference::DetectorFactory::create(
+        detector = inference::DetectorFactory::dsai_create(
             detBackend, cfg_.modelFile, cfg_.yamlFile,
             cfg_.confThreshold, cfg_.nmsThreshold);
     } catch (const std::exception& e) {
@@ -124,11 +124,11 @@ void HeadlessApp::runInferenceLoop() {
     }
 
     if (!cfg_.classLabels.empty())
-        detector->setClassLabels(cfg_.classLabels);
+        detector->dsai_setClassLabels(cfg_.classLabels);
 
     printf("[HeadlessApp] Model loaded: %s  input=%dx%d\n",
            cfg_.modelFile.c_str(),
-           detector->inputSize().width, detector->inputSize().height);
+           detector->dsai_inputSize().width, detector->dsai_inputSize().height);
 
     // ── ROI helper ───────────────────────────────────────────────────────
     auto applyRoi = [&](const cv::Mat& frame) -> cv::Mat {
@@ -145,16 +145,16 @@ void HeadlessApp::runInferenceLoop() {
 
     while (running_) {
         cv::Mat frame;
-        if (!cap.read(frame) || frame.empty()) {
+        if (!cap.dsai_read(frame) || frame.empty()) {
             fprintf(stderr, "[HeadlessApp] Frame read failed — stopping.\n");
             break;
         }
 
-        cv::Mat roi = applyRoi(frame);
+        cv::Mat roi = dsai_applyRoi(frame);
 
         std::vector<inference::Detection> detections;
         try {
-            detections = detector->infer(roi);
+            detections = detector->dsai_infer(roi);
         } catch (const std::exception& e) {
             fprintf(stderr, "[HeadlessApp] infer error: %s\n", e.what());
             continue;
@@ -164,7 +164,7 @@ void HeadlessApp::runInferenceLoop() {
 
         // Print detections to stdout (one line per frame with hits)
         if (!detections.empty() && cfg_.debugLogging) {
-            const auto& names = detector->classNames();
+            const auto& names = detector->dsai_classNames();
             printf("[frame %llu]", static_cast<unsigned long long>(frameN));
             for (const auto& d : detections) {
                 const char* label = (d.classId >= 0 && d.classId < (int)names.size())
@@ -180,7 +180,7 @@ void HeadlessApp::runInferenceLoop() {
                    static_cast<unsigned long long>(frameN), detections.size());
     }
 
-    cap.release();
+    cap.dsai_release();
     printf("[HeadlessApp] Loop exited after %llu frames.\n",
            static_cast<unsigned long long>(frameN));
 }

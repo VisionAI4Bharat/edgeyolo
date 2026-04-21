@@ -31,10 +31,10 @@ public:
     explicit WebConfigServer(HeadlessApp& app);
     ~WebConfigServer();
 
-    // Bind to app.config().webPort and start serving in a background thread.
+    // Bind to app.dsai_config().webPort and start serving in a background thread.
     // Returns false if the port cannot be bound.
-    bool start();
-    void stop();
+    bool dsai_start();
+    void dsai_stop();
 
 private:
     void        serveLoop();
@@ -44,17 +44,17 @@ private:
                          const std::string& body);
 
     // GET handlers
-    std::string jsonConfigResp();
+    std::string dsai_jsonConfigResp();
 
     // POST handlers (update in-memory config + save to disk, no restart)
-    std::string applyModel(const std::string& body);
-    std::string applySource(const std::string& body);
+    std::string dsai_applyModel(const std::string& body);
+    std::string dsai_applySource(const std::string& body);
     std::string applyDetection(const std::string& body);
-    std::string applyRoi(const std::string& body);
+    std::string dsai_applyRoi(const std::string& body);
     std::string applySystem(const std::string& body);
 
     // POST /api/restart — signal inference loop to stop; main() will re-exec
-    std::string triggerRestart();
+    std::string dsai_triggerRestart();
 
     HeadlessApp&      app_;
     int               serverFd_ = -1;

@@ -52,22 +52,22 @@ public:
     explicit OpenVinoDetector() = default;
     ~OpenVinoDetector() override = default;
 
-    /** Optional: set YAML path before load(). Falls back to <model>.yaml. */
+    /** Optional: set YAML path before dsai_load(). Falls back to <model>.yaml. */
     void setYamlPath(const std::string& yamlPath) { yamlPath_ = yamlPath; }
 
     // ── IDetector ─────────────────────────────────────────────────────────
-    void load(const std::string& modelPath,
+    void dsai_load(const std::string& modelPath,
               float confThres = 0.25f,
               float nmsThres  = 0.45f) override;
 
-    std::vector<Detection> infer(const cv::Mat& frame) override;
+    std::vector<Detection> dsai_infer(const cv::Mat& frame) override;
 
-    const std::vector<std::string>& classNames() const override { return classNames_; }
-    void setClassLabels(const std::vector<std::string>& labels) override {
+    const std::vector<std::string>& dsai_classNames() const override { return classNames_; }
+    void dsai_setClassLabels(const std::vector<std::string>& labels) override {
         classNames_ = labels; numClasses_ = static_cast<int>(labels.size());
     }
-    cv::Size inputSize() const override { return inputSize_; }
-    bool     isLoaded()  const override { return loaded_; }
+    cv::Size dsai_inputSize() const override { return inputSize_; }
+    bool     dsai_isLoaded()  const override { return loaded_; }
 
 private:
     void loadYaml(const std::string& modelPath);

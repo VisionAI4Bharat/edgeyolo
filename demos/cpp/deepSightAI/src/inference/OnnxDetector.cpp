@@ -42,7 +42,7 @@ namespace inference {
 
 // ─── OnnxDetector implementation ─────────────────────────────────────────────
 
-void OnnxDetector::load(const std::string& modelPath, float confThres, float nmsThres)
+void OnnxDetector::dsai_load(const std::string& modelPath, float confThres, float nmsThres)
 {
     if (modelPath.empty())
         throw std::runtime_error("OnnxDetector: model path is empty");
@@ -75,7 +75,7 @@ void OnnxDetector::loadYaml(const std::string& modelPath)
     if (!fs::exists(yamlPath))
         throw std::runtime_error(
             "OnnxDetector: sidecar YAML not found: " + yamlPath +
-            "\n  Call setYamlPath() before load() to specify its location.");
+            "\n  Call setYamlPath() before dsai_load() to specify its location.");
 
     try {
         YAML::Node cfg = YAML::LoadFile(yamlPath);
@@ -216,12 +216,12 @@ void OnnxDetector::buildSession(const std::string& modelPath)
         nThreads, nInterOpThreads);
 }
 
-std::vector<Detection> OnnxDetector::infer(const cv::Mat& frame)
+std::vector<Detection> OnnxDetector::dsai_infer(const cv::Mat& frame)
 {
     if (!loaded_)
-        throw std::runtime_error("OnnxDetector: call load() before infer()");
+        throw std::runtime_error("OnnxDetector: call dsai_load() before dsai_infer()");
     if (frame.empty())
-        throw std::runtime_error("OnnxDetector: infer() called with empty frame");
+        throw std::runtime_error("OnnxDetector: dsai_infer() called with empty frame");
 
     const int H = inputSize_.height;
     const int W = inputSize_.width;

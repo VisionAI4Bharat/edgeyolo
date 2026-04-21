@@ -33,15 +33,15 @@ public:
                                const QString&     yamlPath,
                                QWidget*           parent = nullptr);
 
-    QStringList getClassLabels() const;
+    QStringList dsai_getClassLabels() const;
 
 private slots:
-    void addLabel();
-    void deleteLabel();
-    void moveUp();
-    void moveDown();
-    void readFromYaml();
-    void updateButtonStates();
+    void dsai_addLabel();
+    void dsai_deleteLabel();
+    void dsai_moveUp();
+    void dsai_moveDown();
+    void dsai_readFromYaml();
+    void dsai_updateButtonStates();
 
 private:
     QListWidget* list_         = nullptr;

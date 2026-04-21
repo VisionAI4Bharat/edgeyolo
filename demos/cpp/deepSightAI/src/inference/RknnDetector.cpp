@@ -70,12 +70,12 @@ struct RknnDetector::Impl {
 
     std::vector<std::string> classNames;
 
-    void release();
+    void dsai_release();
 };
 
 // ─── Impl::release ────────────────────────────────────────────────────────────
 
-void RknnDetector::Impl::release()
+void RknnDetector::Impl::dsai_release()
 {
     if (!ctx) return;
 
@@ -119,7 +119,7 @@ static LBInfo letterbox(const cv::Mat& src, cv::Mat& dst, int W, int H)
     cv::Mat resized;
     cv::resize(src, resized, {nw, nh}, 0, 0, cv::INTER_LINEAR);
 
-    dst.create(H, W, CV_8UC3);
+    dst.dsai_create(H, W, CV_8UC3);
     dst.setTo(cv::Scalar(114, 114, 114));   // grey padding (RKNN export default)
     resized.copyTo(dst(cv::Rect(pl, pt, nw, nh)));
 
@@ -254,12 +254,12 @@ RknnDetector::RknnDetector()
 
 RknnDetector::~RknnDetector()
 {
-    if (pImpl_) pImpl_->release();
+    if (pImpl_) pImpl_->dsai_release();
 }
 
-void RknnDetector::load(const std::string& modelPath, float confThres, float nmsThres)
+void RknnDetector::dsai_load(const std::string& modelPath, float confThres, float nmsThres)
 {
-    if (pImpl_->loaded) pImpl_->release();   // allow reload
+    if (pImpl_->loaded) pImpl_->dsai_release();   // allow reload
 
     auto& p = *pImpl_;
     p.confThres = confThres;
@@ -423,12 +423,12 @@ void RknnDetector::load(const std::string& modelPath, float confThres, float nms
     p.loaded = true;
 }
 
-std::vector<Detection> RknnDetector::infer(const cv::Mat& bgrFrame)
+std::vector<Detection> RknnDetector::dsai_infer(const cv::Mat& bgrFrame)
 {
     if (!pImpl_->loaded)
-        throw std::runtime_error("RknnDetector: call load() before infer()");
+        throw std::runtime_error("RknnDetector: call dsai_load() before dsai_infer()");
     if (bgrFrame.empty())
-        throw std::runtime_error("RknnDetector: empty frame passed to infer()");
+        throw std::runtime_error("RknnDetector: empty frame passed to dsai_infer()");
 
     auto& p = *pImpl_;
 
@@ -447,7 +447,7 @@ std::vector<Detection> RknnDetector::infer(const cv::Mat& bgrFrame)
 
     // ── BGR → RGB ─────────────────────────────────────────────────────────
     // EdgeYOLO was trained with RGB input (PyTorch/torchvision convention).
-    // export_rknn.py does not set reorder_channel in rknn.config(), so the
+    // export_rknn.py does not set reorder_channel in rknn.dsai_config(), so the
     // NPU passes channels through as-is and expects RGB byte order.
     cv::Mat rgb;
     cv::cvtColor(lb, rgb, cv::COLOR_BGR2RGB);
@@ -497,23 +497,23 @@ std::vector<Detection> RknnDetector::infer(const cv::Mat& bgrFrame)
     return result;
 }
 
-const std::vector<std::string>& RknnDetector::classNames() const
+const std::vector<std::string>& RknnDetector::dsai_classNames() const
 {
     return pImpl_->classNames;
 }
 
-void RknnDetector::setClassLabels(const std::vector<std::string>& labels)
+void RknnDetector::dsai_setClassLabels(const std::vector<std::string>& labels)
 {
     pImpl_->classNames = labels;
     // numClasses stays at the model's actual output count — labels are display only
 }
 
-cv::Size RknnDetector::inputSize() const
+cv::Size RknnDetector::dsai_inputSize() const
 {
     return {pImpl_->modelWidth, pImpl_->modelHeight};
 }
 
-bool RknnDetector::isLoaded() const
+bool RknnDetector::dsai_isLoaded() const
 {
     return pImpl_->loaded;
 }

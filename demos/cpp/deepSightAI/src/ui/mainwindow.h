@@ -49,12 +49,12 @@
 // ─── DetectionWorker ──────────────────────────────────────────────────────────
 
 /**
- * Background thread that pulls frames from a queue, runs IDetector::infer(),
+ * Background thread that pulls frames from a queue, runs IDetector::dsai_infer(),
  * and emits results back to the GUI thread.
  *
  * Ownership: MainWindow owns the unique_ptr<IDetector>; DetectionWorker holds
  * a raw non-owning pointer.  The detector must not be destroyed while the
- * worker is running — always call stop() and wait() before swapping detectors.
+ * worker is running — always call dsai_stop() and wait() before swapping detectors.
  */
 class DetectionWorker : public QThread {
     Q_OBJECT
@@ -62,17 +62,17 @@ public:
     explicit DetectionWorker(QObject* parent = nullptr);
     ~DetectionWorker() override;
 
-    /** Set the detector to use.  Must be called before start() or after stop(). */
-    void setDetector(inference::IDetector* detector);
+    /** Set the detector to use.  Must be called before dsai_start() or after dsai_stop(). */
+    void dsai_setDetector(inference::IDetector* detector);
 
     /** Push a new frame.  Thread-safe; wakes the worker if it was idle. */
-    void pushFrame(const cv::Mat& frame);
+    void dsai_pushFrame(const cv::Mat& frame);
 
     /** Set active/paused state.  Thread-safe. */
-    void setEnabled(bool enabled);
+    void dsai_setEnabled(bool enabled);
 
     /** Signal the run loop to exit, then caller should call wait(). */
-    void stop();
+    void dsai_stop();
 
 signals:
     void detectionResultsReady(QVector<QRect>  boxes,
@@ -113,32 +113,32 @@ public:
     explicit MainWindow(QWidget* parent = nullptr);
     ~MainWindow() override;
 
-    void loadFromConfigFile(const QString& configPath);
+    void dsai_loadFromConfigFile(const QString& configPath);
 
 private slots:
-    void openConfigDialog();
-    void onDetectionResults(QVector<QRect>  boxes,
+    void dsai_openConfigDialog();
+    void dsai_onDetectionResults(QVector<QRect>  boxes,
                             QVector<int>    classIds,
                             QVector<float>  confidences);
-    void onPerformanceMetrics(float fps,
+    void dsai_onPerformanceMetrics(float fps,
                               float inferenceLatency,
                               float nmsLatency,
                               float avgLatency);
-    void updateClock();
-    void handleBoundingBoxChanged(const QRect& box);
+    void dsai_updateClock();
+    void dsai_handleBoundingBoxChanged(const QRect& box);
 
 private:
-    void setupUI();
-    void setupConnections();
-    void initializeDetector(inference::Backend  backend,
+    void dsai_setupUI();
+    void dsai_setupConnections();
+    void dsai_initializeDetector(inference::Backend  backend,
                             const QString&      modelPath,
                             const QString&      yamlPath,
                             float               confThres,
                             float               nmsThres,
                             const QStringList&  classLabels = {});
-    void populateClassCheckboxes(const std::vector<std::string>& names);
-    void startWorker();
-    void stopWorker();
+    void dsai_populateClassCheckboxes(const std::vector<std::string>& names);
+    void dsai_startWorker();
+    void dsai_stopWorker();
 
     // ── UI ────────────────────────────────────────────────────────────────
     QSplitter*    mainSplitter_   = nullptr;

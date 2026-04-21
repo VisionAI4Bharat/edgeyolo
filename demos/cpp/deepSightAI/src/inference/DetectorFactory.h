@@ -38,12 +38,12 @@ enum class Backend {
  * Creates and initialises the requested IDetector backend.
  *
  * Usage:
- *   auto det = DetectorFactory::create(Backend::ONNX, "/path/to/model.onnx", 0.25f, 0.45f);
- *   // det is ready — load() has already been called.
+ *   auto det = DetectorFactory::dsai_create(Backend::ONNX, "/path/to/model.onnx", 0.25f, 0.45f);
+ *   // det is ready — dsai_load() has already been called.
  *
  * Throws std::runtime_error if:
  *   - The requested backend was not compiled in.
- *   - load() fails for any reason.
+ *   - dsai_load() fails for any reason.
  */
 class DetectorFactory {
 public:
@@ -59,17 +59,17 @@ public:
      * @return            Loaded, ready-to-use IDetector.
      * @throws std::runtime_error on any failure.
      */
-    static std::unique_ptr<IDetector> create(Backend            backend,
+    static std::unique_ptr<IDetector> dsai_create(Backend            backend,
                                              const std::string& modelPath,
                                              const std::string& yamlPath  = {},
                                              float              confThres = 0.25f,
                                              float              nmsThres  = 0.45f);
 
     /** Returns true if the backend was compiled into this binary. */
-    static bool isAvailable(Backend backend) noexcept;
+    static bool dsai_isAvailable(Backend backend) noexcept;
 
     /** Human-readable name for a backend enum value. */
-    static const char* name(Backend backend) noexcept;
+    static const char* dsai_name(Backend backend) noexcept;
 };
 
 } // namespace inference

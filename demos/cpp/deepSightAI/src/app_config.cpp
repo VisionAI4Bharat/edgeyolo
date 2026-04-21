@@ -29,27 +29,27 @@ static const int kWidths[]  = { 640, 1280, 1920, 320,  416 };
 static const int kHeights[] = { 480,  720, 1080, 240,  416 };
 static const int kFps[]     = {  15,   25,   30,  60,   90 };
 
-int AppConfig::width()  const {
+int AppConfig::dsai_width()  const {
     int idx = (resolutionIndex >= 0 && resolutionIndex < 5) ? resolutionIndex : 0;
     return kWidths[idx];
 }
-int AppConfig::height() const {
+int AppConfig::dsai_height() const {
     int idx = (resolutionIndex >= 0 && resolutionIndex < 5) ? resolutionIndex : 0;
     return kHeights[idx];
 }
-int AppConfig::fps() const {
+int AppConfig::dsai_fps() const {
     int idx = (fpsIndex >= 0 && fpsIndex < 5) ? fpsIndex : 2;
     return kFps[idx];
 }
 
-std::string AppConfig::defaultPath() {
+std::string AppConfig::dsai_defaultPath() {
     // On embedded target prefer /etc; on desktop follow XDG
     const char* xdg = std::getenv("XDG_CONFIG_HOME");
     std::string base = xdg ? xdg : (std::string(std::getenv("HOME") ? std::getenv("HOME") : "/root") + "/.config");
     return base + "/deepSightAI/config.yaml";
 }
 
-AppConfig AppConfig::loadFromFile(const std::string& path) {
+AppConfig AppConfig::dsai_loadFromFile(const std::string& path) {
     AppConfig cfg;
     YAML::Node n;
     try {
@@ -104,7 +104,7 @@ AppConfig AppConfig::loadFromFile(const std::string& path) {
     return cfg;
 }
 
-void AppConfig::saveToFile(const std::string& path) const {
+void AppConfig::dsai_saveToFile(const std::string& path) const {
     // Ensure parent directory exists
     std::string dir = path.substr(0, path.rfind('/'));
     if (!dir.empty())

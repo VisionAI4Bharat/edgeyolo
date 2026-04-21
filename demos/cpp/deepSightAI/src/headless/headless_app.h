@@ -33,24 +33,24 @@ public:
     explicit HeadlessApp(const std::string& configPath = "");
     ~HeadlessApp();
 
-    // Run capture→infer loop in foreground until stop() is called.
+    // Run capture→infer loop in foreground until dsai_stop() is called.
     // Returns exit code: 0 = clean exit, 1 = restart requested.
     int  run();
-    void stop();
+    void dsai_stop();
 
     // Reload config from disk and restart the inference loop.
-    void requestRestart();
+    void dsai_requestRestart();
 
     // Config access (used by web server)
-    AppConfig&       config()       { return cfg_; }
-    const AppConfig& config() const { return cfg_; }
+    AppConfig&       dsai_config()       { return cfg_; }
+    const AppConfig& dsai_config() const { return cfg_; }
     const std::string& configPath() const { return configPath_; }
 
     // Save current config and signal restart
-    void applyAndRestart(const AppConfig& newCfg);
+    void dsai_applyAndRestart(const AppConfig& newCfg);
 
 private:
-    void runInferenceLoop();
+    void dsai_runInferenceLoop();
 
     AppConfig   cfg_;
     std::string configPath_;
