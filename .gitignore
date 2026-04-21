@@ -13,3 +13,4 @@ third_party/edgeyolo/weights/
 
 generated/
 workspace/
+.aider*
