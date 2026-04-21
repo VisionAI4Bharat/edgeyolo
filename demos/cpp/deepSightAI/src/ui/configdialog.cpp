@@ -929,9 +929,7 @@ void ConfigDialog::dsai_onAccepted()
 
 QString ConfigDialog::dsai_configFilePath()
 {
-    const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
-    QDir().mkpath(dir);
-    return dir + "/config.yaml";
+    return QString::fromStdString(AppConfig::dsai_defaultPath());
 }
 
 void ConfigDialog::dsai_saveConfig()

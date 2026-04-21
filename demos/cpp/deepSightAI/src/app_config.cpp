@@ -43,10 +43,15 @@ int AppConfig::dsai_fps() const {
 }
 
 std::string AppConfig::dsai_defaultPath() {
-    // On embedded target prefer /etc; on desktop follow XDG
+#ifdef __arm__
+    if (std::filesystem::exists("/etc/deepSightAI/config.yaml"))
+        return "/etc/deepSightAI/config.yaml";
+#endif
     const char* xdg = std::getenv("XDG_CONFIG_HOME");
     std::string base = xdg ? xdg : (std::string(std::getenv("HOME") ? std::getenv("HOME") : "/root") + "/.config");
-    return base + "/deepSightAI/config.yaml";
+    std::string dir = base + "/deepSightAI";
+    if (!std::filesystem::exists(dir)) std::filesystem::create_directories(dir);
+    return dir + "/config.yaml";
 }
 
 AppConfig AppConfig::dsai_loadFromFile(const std::string& path) {
