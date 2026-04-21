@@ -170,7 +170,7 @@ else()
     set(LUCKFOX_SDK_ROOT "" CACHE PATH "Rockchip MPI SDK root (include/ + lib/)")
 endif()
 
-# ─── deepsight_capture shared library (no Qt, always built) ──────────────────
+# ─── deepSightAI_capture shared library (no Qt, always built) ──────────────────
 add_subdirectory(src/capture)
 
 # ─── shared inference sources ─────────────────────────────────────────────────
@@ -249,7 +249,7 @@ if(BUILD_QT_GUI)
         ${QT_CORE_LIB} ${QT_GUI_LIB} ${QT_WIDGETS_LIB} ${QT_CONCURRENT_LIB}
         ${OpenCV_LIBS}
         yaml-cpp::yaml-cpp
-        deepsight_capture
+        deepSightAI_capture
     )
     if(WITH_ONNXRT)
         target_link_libraries(deepSightAI-desktop PRIVATE ${ONNXRUNTIME_LIB})
@@ -316,7 +316,7 @@ if(BUILD_HEADLESS)
     target_link_libraries(deepSightAI-headless PRIVATE
         ${OpenCV_LIBS}
         yaml-cpp::yaml-cpp
-        deepsight_capture
+        deepSightAI_capture
     )
     if(WITH_ONNXRT)
         target_link_libraries(deepSightAI-headless PRIVATE ${ONNXRUNTIME_LIB})

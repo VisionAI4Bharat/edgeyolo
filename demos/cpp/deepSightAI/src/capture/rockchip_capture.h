@@ -22,7 +22,7 @@
  * RockchipCapture — hardware camera / RTSP capture for Rockchip SoCs.
  *
  * Zero Qt / UI dependency: pure C++17 + OpenCV.
- * Compiled as libdeepsight_capture.so — link from any application.
+ * Compiled as libdeepSightAI_capture.so — link from any application.
  *
  * Two modes
  * =========
@@ -51,7 +51,7 @@
 #include <string>
 #include <opencv2/core.hpp>
 
-namespace deepsight {
+namespace deepSightAI {
 
 class RockchipCapture {
 public:
@@ -130,4 +130,4 @@ private:
     std::unique_ptr<Impl> pImpl_;
 };
 
-}  // namespace deepsight
+}  // namespace deepSightAI

@@ -338,15 +338,15 @@ void VideoWidget::startCaptureThread() {
     captureThread_ = QThread::create([this, camId, vsPath, rknn]() {
 
         // ── Rockchip hardware path ────────────────────────────────────────────
-        // Uses deepsight::RockchipCapture (libdeepsight_capture.so):
+        // Uses deepSightAI::RockchipCapture (libdeepSightAI_capture.so):
         //   camera  → RK MPI VI pipeline (ISP + YUV420SP→BGR)
         //   RTSP    → OpenCV/ffmpeg (hardware VDEC can replace this later)
         if (rknn) {
-            deepsight::RockchipCapture rkcap;
+            deepSightAI::RockchipCapture rkcap;
 
             bool opened = false;
             if (vsPath.isEmpty()) {
-                deepsight::RockchipCapture::CameraConfig cfg;
+                deepSightAI::RockchipCapture::CameraConfig cfg;
                 cfg.devId = camId;
                 opened = rkcap.openCamera(cfg);
                 if (opened)
@@ -354,7 +354,7 @@ void VideoWidget::startCaptureThread() {
                         camId, rkcap.captureWidth(), rkcap.captureHeight(),
                         rkcap.captureFps());
             } else {
-                deepsight::RockchipCapture::RtspConfig cfg;
+                deepSightAI::RockchipCapture::RtspConfig cfg;
                 cfg.url = vsPath.toStdString();
                 opened = rkcap.openRtsp(cfg);
                 if (opened)

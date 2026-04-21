@@ -38,7 +38,7 @@
 #include "sample_comm.h"
 #endif
 
-namespace deepsight {
+namespace deepSightAI {
 
 // ─── private implementation struct ────────────────────────────────────────────
 
@@ -356,4 +356,4 @@ std::string RockchipCapture::lastError() const {
     return pImpl_ ? pImpl_->lastErr : std::string{};
 }
 
-}  // namespace deepsight
+}  // namespace deepSightAI

@@ -43,14 +43,14 @@ if(NOT OpenCV_FOUND)
 endif()
 
 # ─── library target ───────────────────────────────────────────────────────────
-add_library(deepsight_capture SHARED rockchip_capture.cpp)
+add_library(deepSightAI_capture SHARED rockchip_capture.cpp)
 
-set_target_properties(deepsight_capture PROPERTIES
+set_target_properties(deepSightAI_capture PROPERTIES
     PUBLIC_HEADER rockchip_capture.h
     POSITION_INDEPENDENT_CODE ON
 )
 
-target_include_directories(deepsight_capture
+target_include_directories(deepSightAI_capture
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
         $<INSTALL_INTERFACE:include/deepsight>
@@ -58,7 +58,7 @@ target_include_directories(deepsight_capture
         ${OpenCV_INCLUDE_DIRS}
 )
 
-target_link_libraries(deepsight_capture PUBLIC ${OpenCV_LIBS})
+target_link_libraries(deepSightAI_capture PUBLIC ${OpenCV_LIBS})
 
 # ─── Rockchip RK MPI / RKAIQ (cross-compile for RV1106 / RK3588) ─────────────
 if(WITH_RKNN)
@@ -72,10 +72,10 @@ if(WITH_RKNN)
             "    lib/           (librockit.so, librkaiq.so, libsample_comm.a, …)")
     endif()
 
-    message(STATUS "[deepsight_capture] Rockchip hardware enabled")
-    message(STATUS "[deepsight_capture] SDK root: ${LUCKFOX_SDK_ROOT}")
+    message(STATUS "[deepSightAI_capture] Rockchip hardware enabled")
+    message(STATUS "[deepSightAI_capture] SDK root: ${LUCKFOX_SDK_ROOT}")
 
-    target_compile_definitions(deepsight_capture
+    target_compile_definitions(deepSightAI_capture
         PUBLIC  WITH_RKNN                      # exposed to consumers
         PRIVATE
             ISP_HW_V30                         # selects isp3.x code paths in sample_comm
@@ -85,7 +85,7 @@ if(WITH_RKNN)
 
     # RV1106 is 32-bit ARM Cortex-A7 — enable NEON for OpenCV colour convert
     if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm|ARM")
-        target_compile_options(deepsight_capture PRIVATE -mfpu=neon -mfloat-abi=hard)
+        target_compile_options(deepSightAI_capture PRIVATE -mfpu=neon -mfloat-abi=hard)
     endif()
 
     # luckfox_mpi layout: all headers (rk_mpi_*.h, sample_comm.h, rkaiq/) live
@@ -102,14 +102,14 @@ if(WITH_RKNN)
         endif()
     endforeach()
 
-    target_include_directories(deepsight_capture PRIVATE
+    target_include_directories(deepSightAI_capture PRIVATE
         ${LUCKFOX_SDK_ROOT}/include
         ${LUCKFOX_SDK_ROOT}/include/rkaiq
         ${_RKAIQ_INCDIRS}
     )
 
-    target_link_directories(deepsight_capture PUBLIC ${LUCKFOX_SDK_ROOT}/lib)
-    target_link_libraries(deepsight_capture PUBLIC
+    target_link_directories(deepSightAI_capture PUBLIC ${LUCKFOX_SDK_ROOT}/lib)
+    target_link_libraries(deepSightAI_capture PUBLIC
         rockit          # RK MPI runtime
         rkaiq           # RKAIQ ISP library
         sample_comm     # ISP init/run/stop helpers (libsample_comm.a)
@@ -119,7 +119,7 @@ endif()
 
 # ─── install rules ────────────────────────────────────────────────────────────
 include(GNUInstallDirs)
-install(TARGETS deepsight_capture
+install(TARGETS deepSightAI_capture
     LIBRARY       DESTINATION ${CMAKE_INSTALL_LIBDIR}
     PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/deepsight
 )

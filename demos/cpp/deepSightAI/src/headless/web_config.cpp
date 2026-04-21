@@ -40,7 +40,7 @@ static const char kDashboard[] = R"HTML(<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DeepSight AI Config</title>
+<title>deepSightAI Config</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#111827;color:#e5e7eb;font:14px/1.6 system-ui,sans-serif;padding:16px;max-width:640px;margin:0 auto}
@@ -60,7 +60,7 @@ input[type=checkbox]{flex:none;width:18px;height:18px;accent-color:#2563eb}
 </style>
 </head>
 <body>
-<div id="topbar"><b style="color:#60a5fa">DeepSight AI</b><span id="conn">connecting&#8230;</span></div>
+<div id="topbar"><b style="color:#60a5fa">deepSightAI</b><span id="conn">connecting&#8230;</span></div>
 
 <div class="card"><h2>Model</h2>
 <div class="row"><label>Backend</label><select id="backend"><option value="0">ONNX Runtime</option><option value="1">OpenVINO</option><option value="2">RKNN</option></select></div>

@@ -71,11 +71,11 @@ int HeadlessApp::run() {
 
 void HeadlessApp::runInferenceLoop() {
     // ── open capture source ──────────────────────────────────────────────
-    deepsight::RockchipCapture cap;
+    deepSightAI::RockchipCapture cap;
     bool opened = false;
 
     if (cfg_.source == SourceType::Rtsp && !cfg_.rtspUrl.empty()) {
-        deepsight::RockchipCapture::RtspConfig rc;
+        deepSightAI::RockchipCapture::RtspConfig rc;
         rc.url           = cfg_.rtspUrl;
         rc.openTimeoutMs = 8000;
         rc.readTimeoutMs = 15000;
@@ -85,7 +85,7 @@ void HeadlessApp::runInferenceLoop() {
     }
 
     if (!opened) {
-        deepsight::RockchipCapture::CameraConfig cc;
+        deepSightAI::RockchipCapture::CameraConfig cc;
         cc.devId  = cfg_.cameraDeviceId;
         cc.width  = cfg_.width();
         cc.height = cfg_.height();
