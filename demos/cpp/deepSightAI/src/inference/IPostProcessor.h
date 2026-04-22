@@ -15,20 +15,15 @@ struct Detection {
     int        classId;
 };
 
-/**
- * Context for post-processing results from different backends.
- */
 struct PostProcessContext {
-    int modelWidth;
-    int modelHeight;
-    int numClasses;
+    const float* data;
+    size_t       numProposals;
+    int          numClasses;
     std::vector<std::string> classNames;
-    
-    // Backend specific output raw pointers
-    std::vector<const float*>  outputFloats;
-    std::vector<const int8_t*> outputInt8s;
-    std::vector<float>         outputScales;
-    std::vector<int>           outputZps;
+    int          modelWidth;
+    int          modelHeight;
+    float        scaleX; 
+    float        scaleY;
 };
 
 class IPostProcessor {

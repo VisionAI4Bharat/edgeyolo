@@ -11,6 +11,7 @@
 #include <vector>
 #include <stdexcept>
 #include "IPostProcessor.h"
+#include "IPreProcessor.h"
 
 namespace inference {
 
@@ -31,6 +32,7 @@ public:
 
 protected:
     std::unique_ptr<IPostProcessor> postProcessor_;
+    std::unique_ptr<IPreProcessor> preProcessor_;
 };
 
 } // namespace inference

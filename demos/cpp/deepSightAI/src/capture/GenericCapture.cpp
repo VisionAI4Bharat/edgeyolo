@@ -16,6 +16,8 @@ bool GenericCapture::dsai_openCamera(int devId, int width, int height, double fp
     cap_.set(cv::CAP_PROP_FRAME_WIDTH, width);
     cap_.set(cv::CAP_PROP_FRAME_HEIGHT, height);
     cap_.set(cv::CAP_PROP_FPS, fps);
+    cap_.set(cv::CAP_PROP_BUFFERSIZE, 1);
+    cap_.set(cv::CAP_PROP_BUFFERSIZE, 1);
     isOpen_ = cap_.isOpened();
     return isOpen_;
 #else
@@ -26,6 +28,7 @@ bool GenericCapture::dsai_openCamera(int devId, int width, int height, double fp
 bool GenericCapture::dsai_openSource(const std::string& path) {
 #ifdef HAVE_OPENCV_VIDEOIO
     if (!cap_.open(path)) { lastErr_ = "Failed to open source: " + path; return false; }
+    cap_.set(cv::CAP_PROP_BUFFERSIZE, 1);
     isOpen_ = cap_.isOpened();
     return isOpen_;
 #else

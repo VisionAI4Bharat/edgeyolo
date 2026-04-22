@@ -12,6 +12,7 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGroupBox>
+#include <QCheckBox>
 #include <QTimer>
 #include <QStatusBar>
 #include <QThread>
@@ -19,6 +20,7 @@
 #include <QWaitCondition>
 #include <QVector>
 #include <QString>
+#include <QMap>
 #include <deque>
 #include <memory>
 
@@ -69,6 +71,7 @@ private:
     void dsai_setupUI();
     void dsai_setupConnections();
     void dsai_initializeDetector(inference::Backend backend, const QString& modelPath, const QString& yamlPath, float conf, float nms, const QStringList& labels);
+    void dsai_populateClassCheckboxes(const std::vector<std::string>& names);
     void dsai_startWorker();
     void dsai_stopWorker();
 
@@ -80,6 +83,10 @@ private:
     QLabel* avgLatLabel_ = nullptr;
     QLabel* clockLabel_ = nullptr;
     QStatusBar* statusBar_ = nullptr;
+
+    QGroupBox*    objectsGroup_   = nullptr;
+    QVBoxLayout*  objectsLayout_  = nullptr;
+    QMap<int, QCheckBox*> classCheckboxes_;
 
     std::unique_ptr<inference::IDetector> detector_;
     DetectionWorker* worker_ = nullptr;

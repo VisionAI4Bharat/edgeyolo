@@ -60,15 +60,17 @@ void VideoWidget::dsai_startCaptureThread() {
     captureThread_ = QThread::create([this, devId, path]() {
         auto cap = deepSightAI::CaptureFactory::dsai_create();
         bool opened = false;
-        if (!path.isEmpty()) {
-            opened = cap->dsai_openSource(path.toStdString());
-        } else {
+        if (!path.isEmpty()) opened = cap->dsai_openSource(path.toStdString());
+        else {
             opened = cap->dsai_openCamera(devId, 1280, 720, 30.0);
             if (!opened) opened = cap->dsai_openCamera(devId, 640, 480, 30.0);
         }
         if (!opened) { fprintf(stderr, "[VideoWidget] Failed to open source\n"); return; }
+        
+        // Pacing logic
         double srcFps = cap->dsai_captureFps();
         int frameDelayMs = (srcFps > 0 && srcFps < 300) ? (int)(1000.0 / srcFps) : 33;
+        
         { QMutexLocker lock(&captureMutex_); capture_ = std::move(cap); }
         while(running_) {
             auto start = std::chrono::steady_clock::now();
@@ -76,7 +78,7 @@ void VideoWidget::dsai_startCaptureThread() {
             if (capture_ && capture_->dsai_read(frame)) {
                 { std::lock_guard<QMutex> lock(displayMutex_); currentFrame_ = frame.clone(); }
                 emit frameReady(frame);
-                dsai_updateFrame();
+                QMetaObject::invokeMethod(this, "update", Qt::QueuedConnection);
             }
             auto end = std::chrono::steady_clock::now();
             int elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
@@ -91,36 +93,36 @@ void VideoWidget::dsai_startCaptureThread() {
 
 void VideoWidget::dsai_stopCaptureThread() {
     running_ = false;
-    { std::lock_guard<QMutex> lock(displayMutex_); currentFrame_ = cv::Mat(); qtImage_ = QImage(); } update();
     if (captureThread_) {
         captureThread_->wait();
         delete captureThread_;
         captureThread_ = nullptr;
     }
+    { std::lock_guard<QMutex> lock(displayMutex_); currentFrame_ = cv::Mat(); }
+    update();
 }
 
-void VideoWidget::dsai_updateFrame() {
-    QMetaObject::invokeMethod(this, "update", Qt::QueuedConnection);
-}
+void VideoWidget::dsai_updateFrame() {}
 
 void VideoWidget::paintEvent(QPaintEvent*) {
     QPainter painter(this);
     painter.fillRect(rect(), Qt::black);
 
     cv::Mat frame;
-    { std::lock_guard<QMutex> lock(displayMutex_); if (currentFrame_.empty()) return; frame = currentFrame_.clone(); }
+    { std::lock_guard<QMutex> lock(displayMutex_); if (currentFrame_.empty()) return; frame = currentFrame_; }
 
     QImage img((const uchar*)frame.data, frame.cols, frame.rows, frame.step, QImage::Format_BGR888);
-    qtPixmap_ = QPixmap::fromImage(img).scaled(size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
-    
+    qtPixmap_ = QPixmap::fromImage(img).scaled(size(), Qt::KeepAspectRatio, Qt::FastTransformation);
+    lastFrameSize_ = cv::Size(frame.cols, frame.rows);
+
     int xOff = (width() - qtPixmap_.width()) / 2;
     int yOff = (height() - qtPixmap_.height()) / 2;
     painter.drawPixmap(xOff, yOff, qtPixmap_);
 
-    // Draw Overlays
     float scaleX = (float)qtPixmap_.width() / frame.cols;
     float scaleY = (float)qtPixmap_.height() / frame.rows;
 
+    // Overlays
     static const cv::Scalar kColors[] = {{0,255,0}, {0,0,255}, {255,0,0}, {0,255,255}, {255,0,255}, {255,128,0}};
     {
         std::lock_guard<QMutex> lock(resultsMutex_);
@@ -129,17 +131,14 @@ void VideoWidget::paintEvent(QPaintEvent*) {
             painter.setPen(QPen(color, 2));
             QRect r(xOff + det.rect.x * scaleX, yOff + det.rect.y * scaleY, det.rect.width * scaleX, det.rect.height * scaleY);
             painter.drawRect(r);
-            QString lbl = (det.classId < (int)classNames_.size() ? classNames_[det.classId] : QString("ID:%1").arg(det.classId));
-            painter.drawText(r.topLeft() - QPoint(0, 5), lbl);
+            QString name = (det.classId < (int)classNames_.size() ? classNames_[det.classId] : QString("ID:%1").arg(det.classId));
+            painter.drawText(r.topLeft() - QPoint(0, 5), QString("%1 %2").arg(name).arg(det.confidence, 0, 'f', 2));
         }
     }
-
     if (!boundingBox_.isNull()) {
-        painter.setPen(QPen(Qt::red, 2));
-        QRect r(xOff + boundingBox_.x() * scaleX, yOff + boundingBox_.y() * scaleY, boundingBox_.width() * scaleX, boundingBox_.height() * scaleY);
-        painter.drawRect(r);
+        painter.setPen(QPen(Qt::blue, 2));
+        painter.drawRect(xOff + boundingBox_.x() * scaleX, yOff + boundingBox_.y() * scaleY, boundingBox_.width() * scaleX, boundingBox_.height() * scaleY);
     }
-
     if (!logoPixmap_.isNull() && qtPixmap_.width() > 0) {
         painter.setOpacity(0.7);
         painter.drawPixmap(xOff + qtPixmap_.width() - logoPixmap_.width() - 10, yOff + qtPixmap_.height() - logoPixmap_.height() - 10, logoPixmap_);
@@ -153,18 +152,11 @@ void VideoWidget::mousePressEvent(QMouseEvent* e) {
 }
 
 void VideoWidget::mouseMoveEvent(QMouseEvent* e) {
-    if (isDrawingBox_) {
-        boxCurrentPoint_ = dsai_widgetToImageCoordinates(e->position()).toPoint();
-        boundingBox_ = QRect(boxStartPoint_, boxCurrentPoint_).normalized();
-        update();
-    }
+    if (isDrawingBox_) { boxCurrentPoint_ = dsai_widgetToImageCoordinates(e->position()).toPoint(); boundingBox_ = QRect(boxStartPoint_, boxCurrentPoint_).normalized(); update(); }
 }
 
 void VideoWidget::mouseReleaseEvent(QMouseEvent* e) {
-    if (isDrawingBox_) {
-        isDrawingBox_ = false;
-        emit boundingBoxChanged(boundingBox_);
-    }
+    if (isDrawingBox_) { isDrawingBox_ = false; emit boundingBoxChanged(boundingBox_); }
 }
 
 QPointF VideoWidget::dsai_widgetToImageCoordinates(const QPointF& widgetPos) const {
@@ -172,7 +164,5 @@ QPointF VideoWidget::dsai_widgetToImageCoordinates(const QPointF& widgetPos) con
     if (currentFrame_.empty() || qtPixmap_.isNull()) return widgetPos;
     int xOff = (width() - qtPixmap_.width()) / 2;
     int yOff = (height() - qtPixmap_.height()) / 2;
-    float scaleX = (float)currentFrame_.cols / qtPixmap_.width();
-    float scaleY = (float)currentFrame_.rows / qtPixmap_.height();
-    return QPointF((widgetPos.x() - xOff) * scaleX, (widgetPos.y() - yOff) * scaleY);
+    return QPointF((widgetPos.x() - xOff) * (float)currentFrame_.cols / qtPixmap_.width(), (widgetPos.y() - yOff) * (float)currentFrame_.rows / qtPixmap_.height());
 }
