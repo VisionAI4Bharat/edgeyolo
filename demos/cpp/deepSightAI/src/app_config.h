@@ -26,6 +26,7 @@ struct AppConfig {
     float       confThreshold = 0.25f;
     float       nmsThreshold  = 0.45f;
     std::vector<std::string> classLabels;
+    std::vector<int>         hiddenClassIds;
 
     SourceType  source          = SourceType::Camera;
     int         cameraDeviceId  = 0;

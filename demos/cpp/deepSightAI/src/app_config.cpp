@@ -109,6 +109,12 @@ AppConfig AppConfig::dsai_loadFromFile(const std::string& path) {
             cfg.classLabels.push_back(item.as<std::string>());
     }
 
+    if (n["hidden_class_ids"] && n["hidden_class_ids"].IsSequence()) {
+        cfg.hiddenClassIds.clear();
+        for (const auto& item : n["hidden_class_ids"])
+            cfg.hiddenClassIds.push_back(item.as<int>());
+    }
+
     return cfg;
 }
 
@@ -151,6 +157,10 @@ void AppConfig::dsai_saveToFile(const std::string& path) const {
     YAML::Node labels;
     for (const auto& l : classLabels) labels.push_back(l);
     n["class_labels"] = labels;
+
+    YAML::Node hidden;
+    for (int id : hiddenClassIds) hidden.push_back(id);
+    n["hidden_class_ids"] = hidden;
 
     std::ofstream ofs(path);
     if (!ofs) throw std::runtime_error("AppConfig: cannot write '" + path + "'");

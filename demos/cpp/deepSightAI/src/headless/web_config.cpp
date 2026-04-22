@@ -21,7 +21,11 @@
 #include "web_config.h"
 #include "headless_app.h"
 #include "../app_config.h"
+
+#if __has_include(<opencv2/imgcodecs.hpp>)
 #include <opencv2/imgcodecs.hpp>
+#define HAVE_OPENCV_IMGCODECS
+#endif
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -77,6 +81,10 @@ input[type=checkbox]{flex:none;width:18px;height:18px;accent-color:#2563eb}
             <span>Detections: <b id="det-count">0</b></span>
             <span>Refreshed: <span id="last-update">-</span></span>
         </div>
+    </div>
+    <div class="card" id="filter-card" style="display:none">
+        <h2>Detectable Class Filter</h2>
+        <div id="class-filters" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"></div>
     </div>
 </div>
 
@@ -162,6 +170,24 @@ async function loadCfg(){
     $('roi_h').value=c.roi?c.roi.height:0;
     $('web_port').value=c.web_port;
     $('debug_logging').checked=c.debug_logging;
+
+    if(c.class_labels && c.class_labels.length > 0){
+      $('filter-card').style.display='block';
+      const container = $('class-filters');
+      container.innerHTML = '';
+      c.class_labels.forEach((name, id) => {
+        const div = document.createElement('div');
+        div.className = 'row';
+        div.style.marginBottom = '4px';
+        const checked = !(c.hidden_class_ids || []).includes(id);
+        div.innerHTML = `<input type="checkbox" id="cls-${id}" ${checked?'checked':''} onchange="updateFilter()">
+                         <label for="cls-${id}" style="min-width:auto;margin-left:8px;cursor:pointer">${name}</label>`;
+        container.appendChild(div);
+      });
+    } else {
+      $('filter-card').style.display='none';
+    }
+
     srcVis();
     $('conn').textContent='Connected';
     $('conn').style.color='#34d399';
@@ -223,6 +249,18 @@ function dsai_applyRoi(){
     roi_enabled:$('roi_enabled').checked,
     roi:{x:+v('roi_x'),y:+v('roi_y'),width:+v('roi_w'),height:+v('roi_h')}
   },'st-r');
+}
+
+function updateFilter(){
+  const hidden = [];
+  document.querySelectorAll('#class-filters input[type=checkbox]').forEach(cb => {
+    if(!cb.checked) hidden.push(+cb.id.split('-')[1]);
+  });
+  fetch('/api/config/filter', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({hidden_class_ids: hidden})
+  });
 }
 function applySystem(){
   post('/api/config/system',{
@@ -505,6 +543,7 @@ std::string WebConfigServer::dispatch(const std::string& method,
     if (path == "/api/config/detection" && method == "POST") return applyDetection(body);
     if (path == "/api/config/roi"       && method == "POST") return dsai_applyRoi(body);
     if (path == "/api/config/system"    && method == "POST") return applySystem(body);
+    if (path == "/api/config/filter"    && method == "POST") return dsai_applyFilter(body);
     if (path == "/api/restart"          && method == "POST") return dsai_triggerRestart();
     if (path == "/vision.jpg"           && method == "GET")  return streamResp();
 
@@ -519,20 +558,26 @@ std::string WebConfigServer::dispatch(const std::string& method,
 std::string WebConfigServer::dsai_jsonConfigResp() {
     const AppConfig& c = app_.dsai_config();
 
-    std::string labels = "[";
-    for (size_t i = 0; i < c.classLabels.size(); ++i) {
-        if (i) labels += ',';
-        labels += '"'; labels += c.classLabels[i]; labels += '"';
-    }
-    labels += ']';
+    auto toArr = [](const auto& v) {
+        std::string s = "[";
+        for (size_t i = 0; i < v.size(); ++i) {
+            if (i) s += ',';
+            if constexpr (std::is_same_v<typename std::decay_t<decltype(v)>::value_type, std::string>)
+                s += '"' + v[i] + '"';
+            else
+                s += std::to_string(v[i]);
+        }
+        return s + "]";
+    };
 
-    char buf[2048];
+    char buf[3072];
     snprintf(buf, sizeof(buf),
         "{"
         "\"backend\":%d,"
         "\"model_file\":\"%s\","
         "\"yaml_file\":\"%s\","
         "\"class_labels\":%s,"
+        "\"hidden_class_ids\":%s,"
         "\"source\":%d,"
         "\"camera_device_id\":%d,"
         "\"rtsp_url\":\"%s\","
@@ -552,7 +597,8 @@ std::string WebConfigServer::dsai_jsonConfigResp() {
         "\"debug_logging\":%s"
         "}",
         static_cast<int>(c.backend),
-        c.modelFile.c_str(), c.yamlFile.c_str(), labels.c_str(),
+        c.modelFile.c_str(), c.yamlFile.c_str(), 
+        toArr(c.classLabels).c_str(), toArr(c.hiddenClassIds).c_str(),
         static_cast<int>(c.source), c.cameraDeviceId,
         c.rtspUrl.c_str(), c.videoFile.c_str(), c.iqDir.c_str(),
         c.gain, c.gamma, c.brightness,
@@ -570,6 +616,32 @@ std::string WebConfigServer::dsai_jsonConfigResp() {
 // ── config section handlers ───────────────────────────────────────────────────
 // Each handler patches the in-memory config and saves to disk.
 // Restart must be triggered separately via POST /api/restart.
+
+static std::vector<int> dsai_jIntArr(const std::string& j, const char* key) {
+    std::vector<int> res;
+    std::string pat = std::string("\"") + key + "\"";
+    size_t pos = j.find(pat);
+    if (pos == std::string::npos) return res;
+    pos += pat.size();
+    while (pos < j.size() && (j[pos] == ' ' || j[pos] == ':')) ++pos;
+    if (pos >= j.size() || j[pos] != '[') return res;
+    ++pos;
+    while (pos < j.size() && j[pos] != ']') {
+        while (pos < j.size() && (j[pos] == ' ' || j[pos] == ',' || j[pos] == '\n' || j[pos] == '\r')) ++pos;
+        if (pos < j.size() && (isdigit((unsigned char)j[pos]) || j[pos] == '-')) {
+            char* end = nullptr;
+            res.push_back((int)strtol(j.c_str() + pos, &end, 10));
+            pos = (size_t)(end - j.c_str());
+        } else if (j[pos] == ']') break;
+        else ++pos;
+    }
+    return res;
+}
+
+std::string WebConfigServer::dsai_applyFilter(const std::string& body) {
+    app_.dsai_setHiddenClasses(dsai_jIntArr(body, "hidden_class_ids"));
+    return dsai_ok200("{\"ok\":true}");
+}
 
 static void dsai_saveConfig(HeadlessApp& app) {
     try { app.dsai_config().dsai_saveToFile(app.configPath()); }
@@ -648,21 +720,14 @@ std::string WebConfigServer::dsai_triggerRestart() {
 }
 
 std::string WebConfigServer::streamResp() {
-    // This is a special handler that doesn't return a single string,
-    // but rather takes over the socket for a while (not ideal for this simple server,
-    // but works for one client).
-    // Note: In this simple dispatch architecture, we can't easily stream.
-    // I will return a placeholder or implement a very basic one-frame-at-a-time logic
-    // if the dispatcher is called in a way that allows it.
-    
-    // Actually, to keep it simple and non-blocking for other API calls,
-    // I will implement a simpler "latest frame" JPEG endpoint /api/snapshot
-    // and let the frontend poll it or use a proper multipart if I refactor handleClient.
-    
+#ifdef HAVE_OPENCV_IMGCODECS
     cv::Mat frame = app_.dsai_latestFrame();
     if (frame.empty()) return dsai_err404();
     
     std::vector<uchar> buf;
     cv::imencode(".jpg", frame, buf);
     return dsai_ok200(std::string(buf.begin(), buf.end()), "image/jpeg");
+#else
+    return dsai_err404(); // No imgcodecs on this platform
+#endif
 }

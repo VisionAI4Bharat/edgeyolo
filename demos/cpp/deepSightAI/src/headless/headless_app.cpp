@@ -42,6 +42,11 @@ void HeadlessApp::dsai_applyAndRestart(const AppConfig& newCfg) {
     dsai_requestRestart();
 }
 
+void HeadlessApp::dsai_setHiddenClasses(const std::vector<int>& ids) {
+    cfg_.hiddenClassIds = ids;
+    try { cfg_.dsai_saveToFile(configPath_); } catch(...) {}
+}
+
 int HeadlessApp::run() {
     running_ = true;
     restart_ = false;
@@ -123,10 +128,18 @@ void HeadlessApp::dsai_runInferenceLoop() {
         cv::Mat roi = applyRoi(frame);
         auto detections = detector->dsai_infer(roi);
         
-        cap.dsai_setOSD(detections);
+        // Filter detections
+        std::vector<inference::Detection> filtered;
+        for (const auto& d : detections) {
+            bool hidden = false;
+            for (int id : cfg_.hiddenClassIds) { if (id == d.classId) { hidden = true; break; } }
+            if (!hidden) filtered.push_back(d);
+        }
+
+        cap.dsai_setOSD(filtered);
 
         // Draw for web stream preview (Headless Vision)
-        for (const auto& d : detections) {
+        for (const auto& d : filtered) {
             cv::rectangle(frame, d.rect, cv::Scalar(0, 255, 0), 2);
             std::string label = (d.classId < (int)cfg_.classLabels.size() ? cfg_.classLabels[d.classId] : std::to_string(d.classId));
             cv::putText(frame, label, cv::Point(d.rect.x, d.rect.y - 5), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 1);
@@ -134,10 +147,10 @@ void HeadlessApp::dsai_runInferenceLoop() {
         dsai_pushFrame(frame);
 
         frameN++;
-        DBG_LOG("DETECTOR", "frame %llu: %zu detections\n", frameN, detections.size());
+        DBG_LOG("DETECTOR", "frame %llu: %zu detections\n", frameN, filtered.size());
 
         if (frameN % 100 == 0) {
-            printf("[HeadlessApp] Frame %llu, detections=%zu\n", frameN, detections.size());
+            printf("[HeadlessApp] Frame %llu, detections=%zu\n", frameN, filtered.size());
         }
     }
 

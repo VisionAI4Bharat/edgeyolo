@@ -28,6 +28,9 @@ public:
     bool dsai_isOpened() const override;
     void dsai_setOSD(const std::vector<inference::Detection>&) override {}
 
+    void dsai_setAppConfig(const AppConfig&) override {}
+    void dsai_setModelInputSize(int, int) override {}
+
     int    dsai_captureWidth()  const override;
     int    dsai_captureHeight() const override;
     double dsai_captureFps()    const override;

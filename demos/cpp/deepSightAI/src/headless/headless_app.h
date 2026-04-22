@@ -45,6 +45,9 @@ public:
 
     void dsai_applyAndRestart(const AppConfig& newCfg);
 
+    // Dynamic filtering
+    void dsai_setHiddenClasses(const std::vector<int>& ids);
+
     // Frame sharing for web stream
     void dsai_pushFrame(const cv::Mat& frame);
     cv::Mat dsai_latestFrame();

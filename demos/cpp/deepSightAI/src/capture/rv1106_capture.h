@@ -20,6 +20,9 @@ public:
     void dsai_release() override;
     bool dsai_isOpened() const override;
 
+    void dsai_setAppConfig(const AppConfig& cfg) override;
+    void dsai_setModelInputSize(int w, int h) override;
+
     void dsai_setOSD(const std::vector<inference::Detection>& detections) override;
 
     int    dsai_captureWidth()  const override;

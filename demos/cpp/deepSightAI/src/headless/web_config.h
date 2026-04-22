@@ -52,6 +52,7 @@ private:
     std::string applyDetection(const std::string& body);
     std::string dsai_applyRoi(const std::string& body);
     std::string applySystem(const std::string& body);
+    std::string dsai_applyFilter(const std::string& body);
 
     // POST /api/restart — signal inference loop to stop; main() will re-exec
     std::string dsai_triggerRestart();
