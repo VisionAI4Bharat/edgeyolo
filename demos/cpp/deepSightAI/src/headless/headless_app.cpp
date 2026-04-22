@@ -4,6 +4,7 @@
 
 #include "headless_app.h"
 #include "../app_config.h"
+#include "../debug_log.h"
 
 #include "capture/CaptureFactory.h"
 #include "inference/IDetector.h"
@@ -49,17 +50,31 @@ int HeadlessApp::run() {
 }
 
 void HeadlessApp::dsai_runInferenceLoop() {
+    Debug::dsai_setEnabled(cfg_.debugLogging);
+
     auto cap_ptr = deepSightAI::CaptureFactory::dsai_create();
     deepSightAI::ICapture& cap = *cap_ptr;
 
-    bool opened = cap.dsai_openCamera(cfg_.cameraDeviceId, cfg_.dsai_width(), cfg_.dsai_height(), static_cast<double>(cfg_.dsai_fps()));
+    bool opened = false;
+    if (cfg_.source == SourceType::VideoFile) {
+        printf("[HeadlessApp] Opening video file: %s\n", cfg_.videoFile.c_str());
+        opened = cap.dsai_openSource(cfg_.videoFile);
+    } else if (cfg_.source == SourceType::Rtsp) {
+        printf("[HeadlessApp] Opening RTSP stream: %s\n", cfg_.rtspUrl.c_str());
+        opened = cap.dsai_openSource(cfg_.rtspUrl);
+    } else {
+        printf("[HeadlessApp] Opening camera: device %d, %dx%d @ %dfps\n",
+               cfg_.cameraDeviceId, cfg_.dsai_width(), cfg_.dsai_height(), cfg_.dsai_fps());
+        opened = cap.dsai_openCamera(cfg_.cameraDeviceId, cfg_.dsai_width(), cfg_.dsai_height(), static_cast<double>(cfg_.dsai_fps()));
+    }
+
     if (!opened) {
-        fprintf(stderr, "[HeadlessApp] Camera open failed: %s\n", cap.dsai_lastError().c_str());
+        fprintf(stderr, "[HeadlessApp] Capture open failed: %s\n", cap.dsai_lastError().c_str());
         return;
     }
 
-    printf("[HeadlessApp] Capture open: %dx%d @ %.0ffps\n",
-           cap.dsai_captureWidth(), cap.dsai_captureHeight(), static_cast<int>(cap.dsai_captureFps()));
+    printf("[HeadlessApp] Capture open: %dx%d @ %.1ffps\n",
+           cap.dsai_captureWidth(), cap.dsai_captureHeight(), cap.dsai_captureFps());
 
     if (cfg_.modelFile.empty()) {
         fprintf(stderr, "[HeadlessApp] No model file configured.\n");
@@ -96,10 +111,14 @@ void HeadlessApp::dsai_runInferenceLoop() {
         
         cap.dsai_setOSD(detections);
 
-        if (++frameN % 100 == 0) {
+        frameN++;
+        DBG_LOG("DETECTOR", "frame %llu: %zu detections\n", frameN, detections.size());
+
+        if (frameN % 100 == 0) {
             printf("[HeadlessApp] Frame %llu, detections=%zu\n", frameN, detections.size());
         }
     }
 
     cap.dsai_release();
 }
+

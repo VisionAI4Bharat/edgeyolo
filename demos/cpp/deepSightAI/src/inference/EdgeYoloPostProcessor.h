@@ -4,6 +4,7 @@
 
 #pragma once
 #include "IPostProcessor.h"
+#include "../debug_log.h"
 #include <cmath>
 #include <algorithm>
 #include <vector>
