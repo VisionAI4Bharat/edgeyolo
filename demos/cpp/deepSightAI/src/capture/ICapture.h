@@ -9,15 +9,19 @@
 #include <vector>
 #include "../inference/IDetector.h" // For Detection struct
 
+namespace inference { struct Detection; }
+struct AppConfig;
+
 namespace deepSightAI {
 
-/**
- * Abstract interface for multi-platform video capture.
- * Implementations handle hardware-specific specifics (VI/VENC/OpenCV).
- */
 class ICapture {
 public:
     virtual ~ICapture() = default;
+
+    /** Pass application config to capture instance (e.g. RTSP server settings). */
+    virtual void dsai_setAppConfig(const AppConfig& cfg) {}
+    /** Set expected model input size for secondary hardware channels (e.g. RV1106 VI Chn1). */
+    virtual void dsai_setModelInputSize(int w, int h) {}
 
     /** Open platform camera with requested params. */
     virtual bool dsai_openCamera(int devId, int width, int height, double fps) = 0;

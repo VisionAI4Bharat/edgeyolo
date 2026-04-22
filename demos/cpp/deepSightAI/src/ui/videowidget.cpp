@@ -19,6 +19,8 @@ VideoWidget::~VideoWidget() { dsai_stopCaptureThread(); }
 void VideoWidget::dsai_setCameraDevice(int devId) { cameraDeviceId_ = devId; videoSourcePath_.clear(); }
 void VideoWidget::dsai_setVideoSource(const QString& path) { videoSourcePath_ = path; }
 void VideoWidget::dsai_setRockchipHardware(bool enabled) { isRockchip_ = enabled; }
+void VideoWidget::dsai_setAppConfig(const AppConfig& cfg) { appConfig_ = cfg; }
+void VideoWidget::dsai_setModelInputSize(const cv::Size& size) { modelInputSize_ = size; }
 void VideoWidget::dsai_setClassNames(const QStringList& names) { classNames_ = names; }
 
 void VideoWidget::dsai_setDetectionResults(const std::vector<inference::Detection>& results) {
@@ -57,20 +59,28 @@ void VideoWidget::dsai_startCaptureThread() {
     running_ = true;
     const int devId = cameraDeviceId_;
     const QString path = videoSourcePath_;
-    captureThread_ = QThread::create([this, devId, path]() {
+    const AppConfig cfg = appConfig_;
+    const cv::Size modelSize = modelInputSize_;
+
+    captureThread_ = QThread::create([this, devId, path, cfg, modelSize]() {
         auto cap = deepSightAI::CaptureFactory::dsai_create();
+        cap->dsai_setAppConfig(cfg);
+        cap->dsai_setModelInputSize(modelSize.width, modelSize.height);
+
         bool opened = false;
-        if (!path.isEmpty()) opened = cap->dsai_openSource(path.toStdString());
-        else {
-            opened = cap->dsai_openCamera(devId, 1280, 720, 30.0);
-            if (!opened) opened = cap->dsai_openCamera(devId, 640, 480, 30.0);
+        if (!path.isEmpty()) {
+            DBG_LOG(TAG, "Opening source: %s\n", path.toStdString().c_str());
+            opened = cap->dsai_openSource(path.toStdString());
+        } else {
+            DBG_LOG(TAG, "Opening camera: %d (%dx%d)\n", devId, cfg.dsai_width(), cfg.dsai_height());
+            opened = cap->dsai_openCamera(devId, cfg.dsai_width(), cfg.dsai_height(), (double)cfg.dsai_fps());
         }
-        if (!opened) { fprintf(stderr, "[VideoWidget] Failed to open source\n"); return; }
-        
+        if (!opened) { fprintf(stderr, "[VideoWidget] Failed to open source: %s\n", cap->dsai_lastError().c_str()); return; }
+
         // Pacing logic
         double srcFps = cap->dsai_captureFps();
         int frameDelayMs = (srcFps > 0 && srcFps < 300) ? (int)(1000.0 / srcFps) : 33;
-        
+
         { QMutexLocker lock(&captureMutex_); capture_ = std::move(cap); }
         while(running_) {
             auto start = std::chrono::steady_clock::now();

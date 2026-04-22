@@ -22,7 +22,7 @@ private:
     void loadYaml(const std::string& modelPath);
     Ort::Env env_;
     std::unique_ptr<Ort::Session> session_;
-    cv::Size inputSize_{416, 416};
+    cv::Size inputSize_{0, 0};
     std::vector<std::string> classNames_;
     int numClasses_ = 0;
     float confThres_ = 0.25f;

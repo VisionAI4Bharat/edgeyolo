@@ -55,9 +55,13 @@ static void set_argb8888_corner(uint32_t *buf, int type, uint32_t color) {
 struct RV1106Capture::Impl {
     std::atomic<bool> isOpen{false};
     int width = 1920; int height = 1080;
-    int modelW = 416; int modelH = 416;
+    int modelW = 0; int modelH = 0;
     double fps = 30.0;
     std::string lastErr;
+
+    int rtspPort = 8554;
+    std::string rtspUrl = "/live/0";
+    std::string iqDir = "/etc/iqfiles";
 
     rtsp_demo_handle rtsplive = nullptr;
     rtsp_session_handle rtsp_session = nullptr;
@@ -112,13 +116,12 @@ RV1106Capture::~RV1106Capture() { dsai_release(); }
 
 bool RV1106Capture::dsai_openCamera(int devId, int width, int height, double fps) {
     try {
-        AppConfig cfg = AppConfig::dsai_loadFromFile(AppConfig::dsai_defaultPath());
         pImpl_->width = width; pImpl_->height = height; pImpl_->fps = fps;
-        CHECK_RET(SAMPLE_COMM_ISP_Init(0, RK_AIQ_WORKING_MODE_NORMAL, RK_FALSE, cfg.iqDir.c_str()), "ISP Init");
+        CHECK_RET(SAMPLE_COMM_ISP_Init(0, RK_AIQ_WORKING_MODE_NORMAL, RK_FALSE, pImpl_->iqDir.c_str()), "ISP Init");
         CHECK_RET(SAMPLE_COMM_ISP_Run(0), "ISP Run");
         CHECK_RET(RK_MPI_SYS_Init(), "SYS Init");
-        pImpl_->rtsplive = create_rtsp_demo(cfg.rtspPort);
-        pImpl_->rtsp_session = rtsp_new_session(pImpl_->rtsplive, cfg.rtspUrl.c_str());
+        pImpl_->rtsplive = create_rtsp_demo(pImpl_->rtspPort);
+        pImpl_->rtsp_session = rtsp_new_session(pImpl_->rtsplive, pImpl_->rtspUrl.c_str());
         rtsp_set_video(pImpl_->rtsp_session, RTSP_CODEC_ID_VIDEO_H265, NULL, 0);
         VI_DEV_ATTR_S da; memset(&da, 0, sizeof(da));
         CHECK_RET(RK_MPI_VI_SetDevAttr(0, &da), "VI SetDev");
@@ -187,6 +190,17 @@ void RV1106Capture::dsai_release() {
 void RV1106Capture::dsai_setOSD(const std::vector<inference::Detection>& detections) {
     std::lock_guard<std::mutex> l(pImpl_->osdMutex);
     pImpl_->detections = detections; pImpl_->osdDirty = true;
+}
+
+void RV1106Capture::dsai_setAppConfig(const AppConfig& cfg) {
+    pImpl_->rtspPort = cfg.rtspPort;
+    pImpl_->rtspUrl  = cfg.rtspUrl;
+    pImpl_->iqDir    = cfg.iqDir;
+}
+
+void RV1106Capture::dsai_setModelInputSize(int w, int h) {
+    pImpl_->modelW = w;
+    pImpl_->modelH = h;
 }
 
 bool RV1106Capture::dsai_isOpened() const { return pImpl_->isOpen; }

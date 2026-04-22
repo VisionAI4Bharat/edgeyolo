@@ -23,7 +23,7 @@ private:
     ov::Core core_;
     ov::CompiledModel compiledModel_;
     ov::InferRequest inferRequest_;
-    cv::Size inputSize_{416, 416};
+    cv::Size inputSize_{0, 0};
     std::vector<std::string> classNames_;
     int numClasses_ = 0;
     float confThres_ = 0.25f;

@@ -25,6 +25,8 @@ public:
     void dsai_setCameraDevice(int devId);
     void dsai_setVideoSource(const QString& path);
     void dsai_setRockchipHardware(bool enabled);
+    void dsai_setAppConfig(const AppConfig& cfg);
+    void dsai_setModelInputSize(const cv::Size& size);
     void dsai_setClassNames(const QStringList& names);
     void dsai_setDetectionResults(const std::vector<inference::Detection>& results);
     void dsai_loadRoiFromConfig(const QString& path);
@@ -74,6 +76,9 @@ private:
     bool isRockchip_ = false;
     QPixmap logoPixmap_;
     
+    AppConfig appConfig_;
+    cv::Size modelInputSize_{0, 0};
+
     int cameraDeviceId_ = 0;
     QString videoSourcePath_;
 };

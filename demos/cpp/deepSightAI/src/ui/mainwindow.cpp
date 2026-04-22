@@ -175,7 +175,10 @@ void MainWindow::dsai_loadFromConfigFile(const QString& path) {
 
     inference::Backend backend = static_cast<inference::Backend>(cfg.backend);
     dsai_initializeDetector(backend, modelFilePath_, yamlFilePath_, cfg.confThreshold, cfg.nmsThreshold, QStringList());
-    
+
+    videoWidget_->dsai_setAppConfig(cfg);
+    videoWidget_->dsai_setModelInputSize(detector_->dsai_inputSize());
+
     QFileInfo fi(modelFilePath_);
     roiConfigPath_ = fi.absolutePath() + "/" + fi.completeBaseName() + "_roi.yaml";
     videoWidget_->dsai_loadRoiFromConfig(roiConfigPath_);

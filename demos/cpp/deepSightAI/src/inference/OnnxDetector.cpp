@@ -10,6 +10,15 @@ void OnnxDetector::dsai_load(const std::string& path, float c, float n) {
     confThres_ = c; nmsThres_ = n; loadYaml(path);
     Ort::SessionOptions so; so.SetIntraOpNumThreads(std::thread::hardware_concurrency());
     session_ = std::make_unique<Ort::Session>(env_, path.c_str(), so);
+    
+    auto typeInfo = session_->GetInputTypeInfo(0);
+    auto tensorInfo = typeInfo.GetTensorTypeAndShapeInfo();
+    auto shape = tensorInfo.GetShape();
+    if (shape.size() == 4) {
+        // NCHW or NHWC check (EdgeYOLO is NCHW)
+        inputSize_ = cv::Size((int)shape[3], (int)shape[2]);
+    }
+
     DBG_LOG("ONNX", "Model input: %dx%d, Classes: %d\n", inputSize_.width, inputSize_.height, numClasses_);
     preProcessor_  = std::make_unique<EdgeYoloPreProcessor>();
     postProcessor_ = std::make_unique<EdgeYoloPostProcessor>();
