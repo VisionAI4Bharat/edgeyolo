@@ -514,7 +514,15 @@ void MainWindow::dsai_onDetectionResults(QVector<QRect>  boxes,
         filteredConfs.append(confidences[i]);
     }
 
-    videoWidget_->dsai_setDetectionResults(filteredBoxes, filteredIds, filteredConfs);
+    std::vector<inference::Detection> dets;
+    for(int i=0; i<filteredBoxes.size(); i++) {
+        inference::Detection d;
+        d.rect = cv::Rect2f(filteredBoxes[i].x(), filteredBoxes[i].y(), filteredBoxes[i].width(), filteredBoxes[i].height());
+        d.classId = filteredIds[i];
+        d.confidence = filteredConfs[i];
+        dets.push_back(d);
+    }
+    videoWidget_->dsai_setDetectionResults(dets);
 }
 
 void MainWindow::dsai_onPerformanceMetrics(float fps, float inferLatency,

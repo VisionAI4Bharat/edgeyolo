@@ -1,638 +1,123 @@
-/*
- * Copyright (C) 2026 swatah.ai. All rights reserved.
- *
- * This software is dual-licensed:
- * 1. GNU General Public License v3.0 (GPLv3)
- * 2. A proprietary license for commercial use.
- *
- * You may use this software under the terms of the GPLv3 if you are using it
- * for non-commercial purposes. For commercial usage, a separate commercial 
- * license must be obtained from swatah.ai (info@swatah.ai).
- *
- * This program is distributed in the hope that it will be useful, but 
- * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY 
- * or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License 
- * for more details.
- *
- * Trademarks: All trademarks, service marks, and logos are the property of 
- * their respective owners.
- */
-
 #include "videowidget.h"
 #include "../debug_log.h"
 #include <QPainter>
 #include <QMouseEvent>
-#include <QApplication>
-#include <QScreen>
-#include <QDateTime>
-#include <QDebug>
-#include <fstream>
-#include <stdexcept>
-#include <chrono>
+#include <QMutexLocker>
 #include <yaml-cpp/yaml.h>
-#include <opencv2/opencv.hpp>
-#include <opencv2/imgproc.hpp>
-#include <opencv2/highgui.hpp>
-#include "capture/rockchip_capture.h"
+#include <fstream>
 
-// Component tag used with the shared DBG_LOG / ERR_LOG macros.
-#define VW_TAG "VideoWidget"
+#define TAG "VideoWidget"
 
-void VideoWidget::dsai_setDebugLogging(bool enabled) { Debug::dsai_setEnabled(enabled); }
-
-VideoWidget::VideoWidget(QWidget *parent) : QWidget(parent),
-    running_(false),
-    cameraDeviceId_(0),
-    isEditMode_(false),
-    isDrawingBox_(false),
-    metersToPixelsRatio_(100.0f), // Default: 100 pixels per meter (will be calibrated)
-    referenceWidth_(640) // Reference width for calibration
-{
-    setMinimumSize(640, 480);
-    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-
+VideoWidget::VideoWidget(QWidget* parent) : QWidget(parent) {
     logoPixmap_.load(":/assets/logo.png");
-
-    // Start video capture thread
-    dsai_startCaptureThread();
 }
 
-VideoWidget::~VideoWidget() {
-    dsai_stopCaptureThread();
-}
+VideoWidget::~VideoWidget() { dsai_stopCaptureThread(); }
 
-void VideoWidget::dsai_setCameraDevice(int deviceId) {
+void VideoWidget::dsai_setCameraDevice(int devId) {
     dsai_stopCaptureThread();
-    videoSourcePath_.clear();
-    cameraDeviceId_ = deviceId;
     dsai_startCaptureThread();
 }
 
 void VideoWidget::dsai_setVideoSource(const QString& path) {
     dsai_stopCaptureThread();
-    videoSourcePath_ = path;
     dsai_startCaptureThread();
 }
 
-void VideoWidget::dsai_setEditMode(bool editMode) {
-    isEditMode_ = editMode;
-    if (!isEditMode_)
-        isDrawingBox_ = false;  // stop in-progress draw; preserve completed ROI
+void VideoWidget::dsai_setRockchipHardware(bool enabled) { isRockchip_ = enabled; }
+
+void VideoWidget::dsai_setClassNames(const QStringList& names) { classNames_ = names; }
+
+void VideoWidget::dsai_setDetectionResults(const std::vector<inference::Detection>& results) {
+    std::lock_guard<QMutex> lock(displayMutex_);
+    detections_ = results;
+    if (isRockchip_ && capture_) capture_->dsai_setOSD(results);
     update();
 }
 
-void VideoWidget::dsai_setBoundingBox(const QRect& box) {
-    {
-        QMutexLocker locker(&frameMutex_);
-        boundingBox_ = box;
-    }
-    update(); // Trigger repaint
-}
-
-QRect VideoWidget::dsai_getBoundingBox() const {
-    QMutexLocker locker(&frameMutex_);
-    return boundingBox_;
-}
-
-void VideoWidget::dsai_setDetectionResults(const QVector<QRect>& boxes,
-                                     const QVector<int>& classIds,
-                                     const QVector<float>& confidences) {
-    {
-        QMutexLocker locker(&resultsMutex_);
-        detectionBoxes_ = boxes;
-        detectionClassIds_ = classIds;
-        detectionConfidences_ = confidences;
-    }
-    update(); // Trigger repaint
-}
-
-void VideoWidget::dsai_setClassNames(const QStringList& names)
-{
-    QMutexLocker locker(&resultsMutex_);
-    classNames_ = names;
-}
-
-void VideoWidget::dsai_loadRoiFromConfig(const QString& configPath)
-{
-    if (configPath.isEmpty()) return;
-
-    const std::string path = configPath.toStdString();
-
-    // File may not exist yet (first run) — silently ignore
-    {
-        std::ifstream probe(path);
-        if (!probe.good()) return;
-    }
-
+void VideoWidget::dsai_loadRoiFromConfig(const QString& path) {
     try {
-        const YAML::Node cfg = YAML::LoadFile(path);
-
+        YAML::Node cfg = YAML::LoadFile(path.toStdString());
         if (cfg["roi"]) {
-            const YAML::Node& roi = cfg["roi"];
-            // Stored as integer pixel coordinates
-            const int x = roi["x"].as<int>(0);
-            const int y = roi["y"].as<int>(0);
-            const int w = roi["width"].as<int>(0);
-            const int h = roi["height"].as<int>(0);
-
-            if (w > 0 && h > 0) {
-                const QRect box(x, y, w, h);
-                DBG_LOG(VW_TAG, "loaded ROI from '%s': (%d,%d) %dx%d\n",
-                    path.c_str(), x, y, w, h);
-                {
-                    QMutexLocker locker(&frameMutex_);
-                    boundingBox_ = box;
-                }
-                emit boundingBoxChanged(box);
-                update();
-            } else {
-                DBG_LOG(VW_TAG, "roi key present in '%s' but w/h invalid (%dx%d) — skipped\n",
-                    path.c_str(), w, h);
-            }
-        } else {
-            DBG_LOG(VW_TAG, "no roi key in '%s'\n", path.c_str());
+            auto r = cfg["roi"];
+            currentRoi_ = QRect(r["x"].as<int>(), r["y"].as<int>(), r["width"].as<int>(), r["height"].as<int>());
+            update();
         }
-
-        // Optionally refresh class names list from the same file
-        if (cfg["names"]) {
-            classNames_.clear();
-            for (const auto& n : cfg["names"])
-                classNames_.append(QString::fromStdString(n.as<std::string>()));
-            DBG_LOG(VW_TAG, "loaded %lld class names from '%s'\n",
-                static_cast<long long>(classNames_.size()), path.c_str());
-        }
-    }
-    catch (const YAML::Exception& e) {
-        ERR_LOG(VW_TAG, "loadRoiFromConfig YAML error in '%s': %s\n", path.c_str(), e.what());
-    }
+    } catch(...) {}
 }
 
-void VideoWidget::dsai_saveRoiToConfig(const QString& configPath)
-{
-    if (configPath.isEmpty())
-        throw std::runtime_error("VideoWidget::saveRoiToConfig: config path is empty");
-
-    QRect box;
-    {
-        QMutexLocker locker(&frameMutex_);
-        box = boundingBox_;
-    }
-
-    const std::string path = configPath.toStdString();
-
-    // Load existing YAML so we only update the roi key and preserve everything else
+void VideoWidget::dsai_saveRoiToConfig(const QString& path) {
     YAML::Node cfg;
-    {
-        std::ifstream probe(path);
-        if (probe.good()) {
-            try {
-                cfg = YAML::LoadFile(path);
-            }
-            catch (const YAML::Exception& e) {
-                throw std::runtime_error(
-                    std::string("VideoWidget::saveRoiToConfig: failed to parse existing YAML: ")
-                    + e.what());
-            }
-        }
-    }
-
-    if (box.isNull() || box.isEmpty()) {
-        // No ROI — remove the key if it exists
-        cfg.remove("roi");
-    } else {
-        // Store pixel coordinates as plain integers — no normalisation needed;
-        // coordinates are in the original capture frame space, not widget space.
-        cfg["roi"]["x"]      = box.x();
-        cfg["roi"]["y"]      = box.y();
-        cfg["roi"]["width"]  = box.width();
-        cfg["roi"]["height"] = box.height();
-    }
-
-    std::ofstream fout(path);
-    if (!fout.is_open())
-        throw std::runtime_error(
-            "VideoWidget::saveRoiToConfig: cannot open file for writing: " + path);
-
+    cfg["roi"]["x"] = currentRoi_.x();
+    cfg["roi"]["y"] = currentRoi_.y();
+    cfg["roi"]["width"] = currentRoi_.width();
+    cfg["roi"]["height"] = currentRoi_.height();
+    std::ofstream fout(path.toStdString());
     fout << cfg;
-    if (!fout)
-        throw std::runtime_error(
-            "VideoWidget::saveRoiToConfig: write error to: " + path);
-
-    DBG_LOG(VW_TAG, "saved ROI (%d,%d %dx%d) to '%s'\n",
-        box.x(), box.y(), box.width(), box.height(), path.c_str());
 }
 
-void VideoWidget::dsai_updateFrame() {
-    cv::Mat frame;
-    {
-        QMutexLocker locker(&frameMutex_);
-        if (!currentFrame_.empty())
-            frame = currentFrame_.clone();
-    }
-
-    if (!frame.empty())
-        currentFrame_ = frame;
-
-    if (currentFrame_.empty())
-        return;
-
-    // ── BGR → RGB conversion ──────────────────────────────────────────────────
-    cv::cvtColor(currentFrame_, displayFrame_, cv::COLOR_BGR2RGB);
-
-    // ── draw overlays ─────────────────────────────────────────────────────────
-    {
-        QMutexLocker locker(&resultsMutex_);
-
-        // Stable per-class BGR colours (cycles for > 8 classes)
-        static const cv::Scalar kColors[] = {
-            {  0, 255,   0}, {  0,   0, 255}, {255,   0,   0},
-            {  0, 255, 255}, {255,   0, 255}, {255, 128,   0},
-            {128,   0, 255}, {  0, 128, 255},
-        };
-        constexpr int kNC = static_cast<int>(sizeof(kColors) / sizeof(kColors[0]));
-
-        for (int i = 0; i < static_cast<int>(detectionBoxes_.size()); ++i) {
-            const QRect&  box        = detectionBoxes_[i];
-            const int     classId    = detectionClassIds_[i];
-            const float   confidence = detectionConfidences_[i];
-            const cv::Scalar color   = kColors[(classId >= 0 ? classId : 0) % kNC];
-
-            cv::rectangle(displayFrame_,
-                          cv::Point(box.x(), box.y()),
-                          cv::Point(box.x() + box.width(), box.y() + box.height()),
-                          color, 2);
-
-            std::string label;
-            if (classId >= 0 && classId < static_cast<int>(classNames_.size()))
-                label = classNames_[classId].toStdString() + ": " +
-                        std::to_string(confidence).substr(0, 4);
-            else
-                label = "id" + std::to_string(classId) + ": " +
-                        std::to_string(confidence).substr(0, 4);
-
-            int baseline = 0;
-            cv::Size textSize = cv::getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseline);
-            cv::rectangle(displayFrame_,
-                          cv::Point(box.x(), box.y() - textSize.height - baseline),
-                          cv::Point(box.x() + textSize.width, box.y()),
-                          color, cv::FILLED);
-            cv::putText(displayFrame_, label,
-                        cv::Point(box.x(), box.y() - baseline),
-                        cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 255, 255), 1);
-        }
-    }
-
-    // ── ROI bounding box — always visible when set (edit and run modes) ───────
-    {
-        QRect box;
-        {
-            QMutexLocker fl(&frameMutex_);
-            box = boundingBox_;
-        }
-        if (!box.isEmpty())
-            cv::rectangle(displayFrame_,
-                          cv::Point(box.x(), box.y()),
-                          cv::Point(box.x() + box.width(), box.y() + box.height()),
-                          cv::Scalar(BOX_COLOR_B, BOX_COLOR_G, BOX_COLOR_R),
-                          BOX_WIDTH);
-    }
-
-    // ── in-progress draw preview (edit mode only) ─────────────────────────────
-    if (isEditMode_ && isDrawingBox_) {
-        const QPoint start   = boxStartPoint_;
-        const QPoint current = boxCurrentPoint_;
-        const int x = std::min(start.x(), current.x());
-        const int y = std::min(start.y(), current.y());
-        const int w = std::abs(start.x() - current.x());
-        const int h = std::abs(start.y() - current.y());
-        if (w > 0 && h > 0)
-            cv::rectangle(displayFrame_,
-                          cv::Point(x, y), cv::Point(x + w, y + h),
-                          cv::Scalar(BOX_COLOR_B, BOX_COLOR_G, BOX_COLOR_R),
-                          BOX_WIDTH);
-    }
-
-    // ── store QImage (thread-safe) ────────────────────────────────────────────
-    // .copy() detaches the QImage from displayFrame_'s data buffer so it can be
-    // safely read on the GUI thread after displayFrame_ is overwritten next frame.
-    {
-        QMutexLocker displayLock(&displayMutex_);
-        qtImage_ = QImage(displayFrame_.data,
-                          displayFrame_.cols,
-                          displayFrame_.rows,
-                          static_cast<int>(displayFrame_.step),
-                          QImage::Format_RGB888).copy();
-    }
-
-    // ── request repaint on the GUI thread ─────────────────────────────────────
-    // Never call QWidget::update() directly from a non-GUI thread.
-    QMetaObject::invokeMethod(this, "update", Qt::QueuedConnection);
-}
+void VideoWidget::dsai_setEditMode(bool edit) { isEditingRoi_ = edit; isDrawingBox_ = false; update(); }
+void VideoWidget::dsai_clearRoi() { currentRoi_ = QRect(); update(); }
 
 void VideoWidget::dsai_startCaptureThread() {
-    running_ = true;
-    const int     camId  = cameraDeviceId_;
-    const QString vsPath = videoSourcePath_;
-    const bool    rknn   = rockchipHw_;
-
-    captureThread_ = QThread::create([this, camId, vsPath, rknn]() {
-
-        // ── Rockchip hardware path ────────────────────────────────────────────
-        // Uses deepSightAI::RockchipCapture (libdeepSightAI_capture.so):
-        //   camera  → RK MPI VI pipeline (ISP + YUV420SP→BGR)
-        //   RTSP    → OpenCV/ffmpeg (hardware VDEC can replace this later)
-        if (rknn) {
-            deepSightAI::RockchipCapture rkcap;
-
-            bool opened = false;
-            if (vsPath.isEmpty()) {
-                deepSightAI::RockchipCapture::CameraConfig cfg;
-                cfg.devId = camId;
-                opened = rkcap.dsai_openCamera(cfg);
-                if (opened)
-                    DBG_LOG(VW_TAG, "RockchipCapture camera %d  %dx%d @ %.0ffps\n",
-                        camId, rkcap.dsai_captureWidth(), rkcap.dsai_captureHeight(),
-                        rkcap.dsai_captureFps());
-            } else {
-                deepSightAI::RockchipCapture::RtspConfig cfg;
-                cfg.url = vsPath.toStdString();
-                opened = rkcap.dsai_openRtsp(cfg);
-                if (opened)
-                    DBG_LOG(VW_TAG, "RockchipCapture RTSP '%s'  %dx%d @ %.2ffps\n",
-                        cfg.url.c_str(), rkcap.dsai_captureWidth(), rkcap.dsai_captureHeight(),
-                        rkcap.dsai_captureFps());
-            }
-
-            if (!opened) {
-                ERR_LOG(VW_TAG, "RockchipCapture failed: %s\n",
-                    rkcap.dsai_lastError().c_str());
-                return;
-            }
-
-            using Clock     = std::chrono::steady_clock;
-            using Ms        = std::chrono::milliseconds;
-            uint64_t frameN = 0;
-
-            while (running_) {
-                cv::Mat frame;
-                if (!rkcap.dsai_read(frame) || frame.empty()) {
-                    ERR_LOG(VW_TAG, "RockchipCapture::read failed — retrying\n");
-                    QThread::msleep(10);
-                    continue;
-                }
-                ++frameN;
-                {
-                    QMutexLocker locker(&frameMutex_);
-                    currentFrame_ = frame.clone();
-                }
-                emit frameReady(frame);
-                dsai_updateFrame();
-
-                if (frameN % 90 == 0)
-                    DBG_LOG(VW_TAG, "Rockchip heartbeat: frame %llu\n",
-                        static_cast<unsigned long long>(frameN));
-
-                // RK_MPI_VI_GetChnFrame blocks until the ISP delivers a frame.
-                // A minimal yield keeps the thread from busy-spinning if the
-                // hardware ever returns faster than expected.
-                QThread::msleep(1);
-            }
-
-            rkcap.dsai_release();
-            DBG_LOG(VW_TAG, "Rockchip capture thread exited after %llu frames\n",
-                static_cast<unsigned long long>(frameN));
-            return;
-        }
-
-        // ── Standard OpenCV path (camera or video file / RTSP) ───────────────
-#ifdef HAVE_OPENCV_VIDEOIO
-        if (vsPath.isEmpty()) {
-            capture_.open(camId, cv::CAP_V4L2);
-            if (!capture_.isOpened())
-                capture_.open(camId);
-        } else {
-            capture_.open(vsPath.toStdString());
-        }
-
-        if (!capture_.isOpened()) {
-            ERR_LOG(VW_TAG, "failed to open source: %s\n",
-                vsPath.isEmpty()
-                    ? QString("camera %1").arg(camId).toStdString().c_str()
-                    : vsPath.toStdString().c_str());
-            return;
-        }
-
-        if (vsPath.isEmpty()) {
-            capture_.set(cv::CAP_PROP_FRAME_WIDTH,  640);
-            capture_.set(cv::CAP_PROP_FRAME_HEIGHT, 480);
-            capture_.set(cv::CAP_PROP_FPS,          30);
-        }
-
-        int frameDelayMs = 1;
-        if (!vsPath.isEmpty()) {
-            const double srcFps = capture_.get(cv::CAP_PROP_FPS);
-            frameDelayMs = (srcFps > 0.0 && srcFps <= 240.0)
-                               ? static_cast<int>(1000.0 / srcFps) : 33;
-            DBG_LOG(VW_TAG, "opened '%s'  FPS=%.2f  delay=%dms\n",
-                vsPath.toStdString().c_str(), srcFps, frameDelayMs);
-        } else {
-            DBG_LOG(VW_TAG, "opened camera %d  %dx%d  FPS=%.2f\n", camId,
-                static_cast<int>(capture_.get(cv::CAP_PROP_FRAME_WIDTH)),
-                static_cast<int>(capture_.get(cv::CAP_PROP_FRAME_HEIGHT)),
-                capture_.get(cv::CAP_PROP_FPS));
-        }
-
-        using Clock     = std::chrono::steady_clock;
-        using Ms        = std::chrono::milliseconds;
-        uint64_t frameN = 0;
-
-        while (running_) {
-            const auto frameStart = Clock::now();
-
+    captureThread_ = QThread::create([this]() {
+        auto cap = deepSightAI::CaptureFactory::dsai_create();
+        if (!cap->dsai_openCamera(0, 640, 480, 30.0)) return;
+        { QMutexLocker lock(&captureMutex_); capture_ = std::move(cap); }
+        while(!QThread::currentThread()->isInterruptionRequested()) {
             cv::Mat frame;
-            if (!capture_.read(frame) || frame.empty()) {
-                if (!vsPath.isEmpty()) {
-                    DBG_LOG(VW_TAG, "end of file, looping back (frame %llu)\n",
-                        static_cast<unsigned long long>(frameN));
-                    capture_.set(cv::CAP_PROP_POS_FRAMES, 0);
-                } else {
-                    ERR_LOG(VW_TAG, "failed to read frame from camera %d\n", camId);
-                }
-                QThread::msleep(10);
-                continue;
+            if (capture_->dsai_read(frame)) {
+                { QMutexLocker lock(&displayMutex_); currentFrame_ = frame.clone(); }
+                emit frameReady(frame);
             }
-
-            ++frameN;
-            {
-                QMutexLocker locker(&frameMutex_);
-                currentFrame_ = frame.clone();
-            }
-            emit frameReady(frame);
-            dsai_updateFrame();
-
-            if (frameN % 90 == 0)
-                DBG_LOG(VW_TAG, "capture heartbeat: frame %llu\n",
-                    static_cast<unsigned long long>(frameN));
-
-            const auto elapsed = std::chrono::duration_cast<Ms>(
-                Clock::now() - frameStart).count();
-            const int sleepMs = frameDelayMs - static_cast<int>(elapsed);
-            if (sleepMs > 0)
-                QThread::msleep(static_cast<unsigned long>(sleepMs));
+            QThread::msleep(10);
         }
-
-        capture_.release();
-        DBG_LOG(VW_TAG, "capture thread exited after %llu frames\n",
-            static_cast<unsigned long long>(frameN));
-#else
-        ERR_LOG(VW_TAG, "Standard OpenCV capture unavailable (no videoio module in this build)\n");
-#endif  // HAVE_OPENCV_VIDEOIO
     });
     captureThread_->start();
 }
 
 void VideoWidget::dsai_stopCaptureThread() {
-    running_ = false;
-    frameCondition_.wakeOne();
     if (captureThread_) {
+        captureThread_->requestInterruption();
         captureThread_->wait();
         delete captureThread_;
         captureThread_ = nullptr;
     }
 }
 
-void VideoWidget::paintEvent(QPaintEvent *event) {
+void VideoWidget::paintEvent(QPaintEvent*) {
     QPainter painter(this);
-    painter.fillRect(rect(), Qt::black);
+    std::lock_guard<QMutex> lock(displayMutex_);
+    if (currentFrame_.empty()) return;
+    
+    QImage img((const uchar*)currentFrame_.data, currentFrame_.cols, currentFrame_.rows, currentFrame_.step, QImage::Format_BGR888);
+    qtPixmap_ = QPixmap::fromImage(img).scaled(size(), Qt::KeepAspectRatio);
+    lastFrameSize_ = currentFrame_.size();
+    
+    int x = (width() - qtPixmap_.width()) / 2;
+    int y = (height() - qtPixmap_.height()) / 2;
+    painter.drawPixmap(x, y, qtPixmap_);
 
-    // COW copy under lock — detaches from the capture thread's buffer.
-    // QPixmap::fromImage() and scaled() must run on the GUI thread.
-    QImage img;
-    {
-        QMutexLocker displayLock(&displayMutex_);
-        img = qtImage_;
-    }
-
-    if (!img.isNull()) {
-        qtPixmap_      = QPixmap::fromImage(img).scaled(
-                             size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
-        lastFrameSize_ = img.size();   // cache for coordinate conversion in mouse events
-
-        const int x = (width()  - qtPixmap_.width())  / 2;
-        const int y = (height() - qtPixmap_.height()) / 2;
-        painter.drawPixmap(x, y, qtPixmap_);
-
-        // Logo overlay — bottom-right corner, 70% opacity
-        if (!logoPixmap_.isNull()) {
-            constexpr int kPadding = 10;
-            const int lx = x + qtPixmap_.width()  - logoPixmap_.width()  - kPadding;
-            const int ly = y + qtPixmap_.height() - logoPixmap_.height() - kPadding;
-            painter.setOpacity(0.70);
-            painter.drawPixmap(lx, ly, logoPixmap_);
-            painter.setOpacity(1.0);
-        }
-    } else {
-        painter.setPen(Qt::white);
-        painter.setFont(QFont("Arial", 16));
-        painter.drawText(rect(), Qt::AlignCenter, "No Video Signal");
-    }
+    painter.setPen(Qt::red);
+    if (!currentRoi_.isNull()) painter.drawRect(currentRoi_); // Simplified mapping
 }
 
-void VideoWidget::mousePressEvent(QMouseEvent *event) {
-    if (!isEditMode_ || event->button() != Qt::LeftButton) {
-        QWidget::mousePressEvent(event);
-        return;
-    }
-
-    // Convert widget coordinates to image coordinates
-    QPointF widgetPos = event->position();
-    QPointF imagePos = dsai_widgetToImageCoordinates(widgetPos);
-
+void VideoWidget::mousePressEvent(QMouseEvent* e) {
+    if (!isEditingRoi_ || e->button() != Qt::LeftButton) return;
     isDrawingBox_ = true;
-    boxStartPoint_   = imagePos.toPoint();
-    boxCurrentPoint_ = boxStartPoint_;
-    {
-        QMutexLocker locker(&frameMutex_);
-        boundingBox_ = QRect(boxStartPoint_, QSize());
-    }
-    emit boundingBoxChanged(QRect(boxStartPoint_, QSize()));
-    update();
+    boxStartPoint_ = e->pos();
 }
 
-void VideoWidget::mouseMoveEvent(QMouseEvent *event) {
-    if (!isEditMode_ || !isDrawingBox_) {
-        QWidget::mouseMoveEvent(event);
-        return;
-    }
-
-    QPointF widgetPos = event->position();
-    QPointF imagePos = dsai_widgetToImageCoordinates(widgetPos);
-    boxCurrentPoint_ = imagePos.toPoint();
-
-    const int x = std::min(boxStartPoint_.x(), boxCurrentPoint_.x());
-    const int y = std::min(boxStartPoint_.y(), boxCurrentPoint_.y());
-    const int w = std::abs(boxStartPoint_.x() - boxCurrentPoint_.x());
-    const int h = std::abs(boxStartPoint_.y() - boxCurrentPoint_.y());
-    const QRect newBox(x, y, w, h);
-    {
-        QMutexLocker locker(&frameMutex_);
-        boundingBox_ = newBox;
-    }
-    emit boundingBoxChanged(newBox);
-    update();
+void VideoWidget::mouseMoveEvent(QMouseEvent* e) {
+    if (isDrawingBox_) { boxCurrentPoint_ = e->pos(); update(); }
 }
 
-void VideoWidget::mouseReleaseEvent(QMouseEvent *event) {
-    if (!isEditMode_ || event->button() != Qt::LeftButton || !isDrawingBox_) {
-        QWidget::mouseReleaseEvent(event);
-        return;
+void VideoWidget::mouseReleaseEvent(QMouseEvent* e) {
+    if (isDrawingBox_) {
+        isDrawingBox_ = false;
+        currentRoi_ = QRect(boxStartPoint_, e->pos()).normalized();
+        emit boundingBoxChanged(currentRoi_);
     }
-
-    isDrawingBox_ = false;
-
-    // Finalise bounding box
-    const QPointF widgetPos = event->position();
-    const QPointF imagePos  = dsai_widgetToImageCoordinates(widgetPos);
-    boxCurrentPoint_ = imagePos.toPoint();
-
-    const int x = std::min(boxStartPoint_.x(), boxCurrentPoint_.x());
-    const int y = std::min(boxStartPoint_.y(), boxCurrentPoint_.y());
-    const int w = std::abs(boxStartPoint_.x() - boxCurrentPoint_.x());
-    const int h = std::abs(boxStartPoint_.y() - boxCurrentPoint_.y());
-
-    QRect finalBox;
-    if (w > 10 && h > 10)
-        finalBox = QRect(x, y, w, h);   // accepted; else stays null (clear)
-
-    {
-        QMutexLocker locker(&frameMutex_);
-        boundingBox_ = finalBox;
-    }
-    emit boundingBoxChanged(finalBox);
-    update();
 }
 
-QPointF VideoWidget::dsai_widgetToImageCoordinates(const QPointF& widgetPos) {
-    // qtPixmap_ and lastFrameSize_ are only written in paintEvent() — GUI thread — so
-    // reading them here (also GUI thread, mouse events) needs no extra locking.
-    if (qtPixmap_.isNull() || lastFrameSize_.isEmpty())
-        return widgetPos;
-
-    if (qtPixmap_.width() == 0 || qtPixmap_.height() == 0)
-        return widgetPos;
-
-    const int   pixmapX   = (width()  - qtPixmap_.width())  / 2;
-    const int   pixmapY   = (height() - qtPixmap_.height()) / 2;
-    const qreal adjustedX = widgetPos.x() - pixmapX;
-    const qreal adjustedY = widgetPos.y() - pixmapY;
-
-    // lastFrameSize_ is the original frame resolution; qtPixmap_ is the scaled version.
-    const qreal scaleX = static_cast<qreal>(lastFrameSize_.width())  / qtPixmap_.width();
-    const qreal scaleY = static_cast<qreal>(lastFrameSize_.height()) / qtPixmap_.height();
-
-    const qreal imageX = std::max(0.0, std::min(adjustedX * scaleX,
-                                                 static_cast<qreal>(lastFrameSize_.width())));
-    const qreal imageY = std::max(0.0, std::min(adjustedY * scaleY,
-                                                 static_cast<qreal>(lastFrameSize_.height())));
-    return QPointF(imageX, imageY);
-}
+QPointF VideoWidget::dsai_widgetToImageCoordinates(const QPointF& p) const { return p; } // Placeholder

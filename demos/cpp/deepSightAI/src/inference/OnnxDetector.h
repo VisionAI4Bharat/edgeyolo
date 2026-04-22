@@ -1,128 +1,34 @@
-/*
- * Copyright (C) 2026 swatah.ai. All rights reserved.
- *
- * This software is dual-licensed:
- * 1. GNU General Public License v3.0 (GPLv3)
- * 2. A proprietary license for commercial use.
- *
- * You may use this software under the terms of the GPLv3 if you are using it
- * for non-commercial purposes. For commercial usage, a separate commercial 
- * license must be obtained from swatah.ai (info@swatah.ai).
- *
- * This program is distributed in the hope that it will be useful, but 
- * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY 
- * or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License 
- * for more details.
- *
- * Trademarks: All trademarks, service marks, and logos are the property of 
- * their respective owners.
- */
-
-#ifndef ONNXDETECTOR_H
-#define ONNXDETECTOR_H
-
-#ifdef WITH_ONNXRT
-
+#pragma once
 #include "IDetector.h"
-
 #include <onnxruntime_cxx_api.h>
 #include <yaml-cpp/yaml.h>
-#include <opencv2/core.hpp>
-
-#include <array>
-#include <memory>
-#include <string>
-#include <vector>
 
 namespace inference {
 
-/**
- * EdgeYOLO ONNX Runtime backend.
- *
- * Expects the EdgeYOLO fused-head ONNX export:
- *   input  : [B, 3, H, W]   (model was exported with B=16; we run B=1)
- *   output : [B, N, 7]       where 7 = cx, cy, w, h, obj_conf, cls0_score, cls1_score, …
- *
- * A sidecar YAML (same basename as the .onnx, or supplied via setYamlPath) must
- * contain at minimum:
- *   names: [classA, classB, …]
- * Optionally:
- *   img_size: [H, W]   (overrides shape read from the model graph)
- *
- * The model exported batch size is ignored at runtime; a single frame is
- * forwarded by constructing a [1, 3, H, W] input tensor.
- *
- * Thread safety: NOT thread-safe. Create one instance per thread.
- */
 class OnnxDetector : public IDetector {
 public:
-    explicit OnnxDetector() = default;
+    OnnxDetector() : env_(ORT_LOGGING_LEVEL_WARNING, "deepSightAI") {}
     ~OnnxDetector() override = default;
 
-    /**
-     * Optionally set the YAML config path before calling dsai_load().
-     * If not called, dsai_load() looks for <modelBaseName>.yaml next to the model.
-     */
-    void setYamlPath(const std::string& yamlPath) { yamlPath_ = yamlPath; }
-
-    // ── IDetector ─────────────────────────────────────────────────────────
-
-    /**
-     * @throws std::runtime_error if model or YAML cannot be loaded,
-     *         or if the output tensor shape is unexpected.
-     */
-    void dsai_load(const std::string& modelPath,
-              float confThres = 0.25f,
-              float nmsThres  = 0.45f) override;
-
-    /**
-     * @throws std::runtime_error on ORT session run failure.
-     */
+    void dsai_load(const std::string& modelPath, float confThres, float nmsThres) override;
     std::vector<Detection> dsai_infer(const cv::Mat& frame) override;
-
     const std::vector<std::string>& dsai_classNames() const override { return classNames_; }
-    void dsai_setClassLabels(const std::vector<std::string>& labels) override {
-        classNames_ = labels; numClasses_ = static_cast<int>(labels.size());
-    }
+    void dsai_setClassLabels(const std::vector<std::string>& labels) override { classNames_ = labels; numClasses_ = labels.size(); }
     cv::Size dsai_inputSize() const override { return inputSize_; }
-    bool     dsai_isLoaded()  const override { return loaded_; }
+    bool dsai_isLoaded() const override { return loaded_; }
+    void dsai_setYamlPath(const std::string& path) override { yamlPath_ = path; }
 
 private:
     void loadYaml(const std::string& modelPath);
-    void buildSession(const std::string& modelPath);
-
-    // ORT objects
-    Ort::Env                          env_{ ORT_LOGGING_LEVEL_WARNING, "OnnxDetector" };
-    Ort::SessionOptions               sessionOptions_;
-    std::unique_ptr<Ort::Session>     session_;
-    Ort::AllocatorWithDefaultOptions  allocator_;
-
-    // Input / output names (owned strings kept alive for the session lifetime)
-    std::vector<std::string>          inputNameStrs_;
-    std::vector<std::string>          outputNameStrs_;
-    std::vector<const char*>          inputNames_;
-    std::vector<const char*>          outputNames_;
-
-    // Model metadata
-    cv::Size                          inputSize_{ 416, 416 };
-    int                               numClasses_{ 0 };
-    std::vector<std::string>          classNames_;
-
-    // Inference parameters
-    float confThres_{ 0.25f };
-    float nmsThres_{  0.45f };
-
-    // Pre-allocated preprocessing buffers (avoid per-frame heap allocs)
-    std::vector<float>        blob_;
-    std::vector<cv::Mat>      splitChannels_;
-    std::array<int64_t, 4>   inShape_{ 1, 3, 0, 0 };  // filled in buildSession
-    Ort::MemoryInfo           memInfo_{ Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault) };
-
+    Ort::Env env_;
+    std::unique_ptr<Ort::Session> session_;
+    cv::Size inputSize_{416, 416};
+    std::vector<std::string> classNames_;
+    int numClasses_ = 0;
+    float confThres_ = 0.25f;
+    float nmsThres_ = 0.45f;
+    bool loaded_ = false;
     std::string yamlPath_;
-    bool        loaded_{ false };
 };
 
-} // namespace inference
-
-#endif  // WITH_ONNXRT
-#endif  // ONNXDETECTOR_H
+}

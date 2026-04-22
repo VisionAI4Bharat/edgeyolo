@@ -87,7 +87,7 @@ std::unique_ptr<IDetector> DetectorFactory::dsai_create(Backend            backe
         case Backend::ONNX: {
             auto d = std::make_unique<OnnxDetector>();
             if (!yamlPath.empty())
-                d->setYamlPath(yamlPath);
+                d->dsai_setYamlPath(yamlPath);
             detector = std::move(d);
             break;
         }
@@ -96,7 +96,7 @@ std::unique_ptr<IDetector> DetectorFactory::dsai_create(Backend            backe
         case Backend::OPENVINO: {
             auto d = std::make_unique<OpenVinoDetector>();
             if (!yamlPath.empty())
-                d->setYamlPath(yamlPath);
+                d->dsai_setYamlPath(yamlPath);
             detector = std::move(d);
             break;
         }

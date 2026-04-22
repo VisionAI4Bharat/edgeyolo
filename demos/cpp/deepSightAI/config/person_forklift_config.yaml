@@ -22,15 +22,63 @@
 #            Set explicitly when the model was exported with a dynamic batch
 #            dimension and the graph shape shows −1.
 
+# ── Inference ────────────────────────────────────────────────────────────────
+# backend: 0=ONNX Runtime, 1=OpenVINO, 2=RKNN
+backend: 1
+
+# Absolute path to the model file (.onnx, .xml, or .rknn)
+model_file: "/home/abhinav/ml/edgeyolo/workspace/exports/edgeyolo_person_forklift_tiny_416/edgeyolo_person_forklift_tiny_416_int8.xml"
+
+# Absolute path to the class labels YAML (defines names: [label1, label2, ...])
+yaml_file: "/home/abhinav/ml/edgeyolo/demos/cpp/deepSightAI/config/person_forklift_config.yaml"
+
+conf_threshold: 0.5
+nms_threshold: 0.35
+
 # ── Class labels ─────────────────────────────────────────────────────────────
 names:
-  - person
   - forklift
+  - person
 
 # ── Input resolution (optional override) ─────────────────────────────────────
 # Uncomment and adjust if the ONNX graph reports dynamic/unknown spatial dims.
 # img_size: [416, 416]   # [height, width]
 
+# ── Video Source ─────────────────────────────────────────────────────────────
+# source: 0=Camera, 1=VideoFile, 2=Rtsp
+source: 1
+
+# Camera device ID (e.g., 0 for /dev/video0)
+camera_device_id: 0
+
+# Path to local video file (used if source=1)
+video_file: "/home/abhinav/ml/edgeyolo/videos/1.mp4"
+
+# RTSP URL for remote stream (used if source=2)
+rtsp_url: "/live/0"
+
+# ── RV1106 / Rockchip Specific ───────────────────────────────────────────────
+# Enable hardware-accelerated pipeline (VI/VENC/RGN)
+rockchip_hw: false
+
+# IQ files directory for RKAIQ ISP tuning
+iq_dir: "/etc/iqfiles"
+
+# RTSP Server settings (Headless/RV1106 mode only)
+# Serves an annotated H.265 stream
+rtsp_port: 8554
+
+# ── UI / Dashboard ───────────────────────────────────────────────────────────
+# resolution_index: 0=640x480, 1=1280x720, 2=1920x1080
+resolution_index: 1
+fps_index: 2
+
+# V4L2 Camera controls
+gain: 50
+gamma: 91
+brightness: 0
+
+# ── ROI ──────────────────────────────────────────────────────────────────────
 # ── Notes ─────────────────────────────────────────────────────────────────────
 # ROI (region of interest) is stored in a separate file auto-named
 #   <model_basename>_roi.yaml
@@ -43,3 +91,17 @@ names:
 #   y: 80
 #   width: 1080
 #   height: 720
+
+roi_enabled: false
+roi:
+  x: 0
+  y: 0
+  width: 0
+  height: 0
+
+# ── System ───────────────────────────────────────────────────────────────────
+# Port for the web configuration dashboard
+web_port: 8080
+debug_logging: true
+
+

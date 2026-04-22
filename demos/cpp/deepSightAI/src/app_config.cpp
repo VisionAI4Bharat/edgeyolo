@@ -91,6 +91,8 @@ AppConfig AppConfig::dsai_loadFromFile(const std::string& path) {
     get("roi_enabled",      cfg.roiEnabled);
     get("web_port",         cfg.webPort);
     get("debug_logging",    cfg.debugLogging);
+    get("rtsp_port",         cfg.rtspPort);
+    get("rtsp_port",         cfg.rtspPort);
 
     if (n["roi"]) {
         YAML::Node r = n["roi"];
@@ -135,6 +137,8 @@ void AppConfig::dsai_saveToFile(const std::string& path) const {
     n["rockchip_hw"]      = rockchipHw;
     n["web_port"]         = webPort;
     n["debug_logging"]    = debugLogging;
+    n["rtsp_port"]         = rtspPort;
+    n["rtsp_port"]         = rtspPort;
 
     YAML::Node roiNode;
     roiNode["x"]      = roi.x;
