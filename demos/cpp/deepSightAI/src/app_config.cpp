@@ -102,9 +102,10 @@ AppConfig AppConfig::dsai_loadFromFile(const std::string& path) {
         if (r["height"]) cfg.roi.height = r["height"].as<int>();
     }
 
-    if (n["class_labels"] && n["class_labels"].IsSequence()) {
+    YAML::Node labelsNode = n["class_labels"] ? n["class_labels"] : n["names"];
+    if (labelsNode && labelsNode.IsSequence()) {
         cfg.classLabels.clear();
-        for (const auto& item : n["class_labels"])
+        for (const auto& item : labelsNode)
             cfg.classLabels.push_back(item.as<std::string>());
     }
 

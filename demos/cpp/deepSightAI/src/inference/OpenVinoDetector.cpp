@@ -14,6 +14,7 @@ void OpenVinoDetector::dsai_load(const std::string& path, float c, float n) {
     if (inputShape.rank().is_static() && inputShape.rank().get_length() == 4) {
         inputSize_ = cv::Size((int)inputShape[3].get_length(), (int)inputShape[2].get_length());
     }
+    DBG_LOG("OPENVINO", "Model input: %dx%d, Classes: %d\n", inputSize_.width, inputSize_.height, numClasses_);
     inputBlob_.assign(1 * 3 * inputSize_.width * inputSize_.height, 0.0f);
     preProcessor_  = std::make_unique<EdgeYoloPreProcessor>();
     postProcessor_ = std::make_unique<EdgeYoloPostProcessor>();
