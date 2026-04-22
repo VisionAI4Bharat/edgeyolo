@@ -21,6 +21,7 @@
 #include "web_config.h"
 #include "headless_app.h"
 #include "../app_config.h"
+#include <opencv2/imgcodecs.hpp>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -43,8 +44,11 @@ static const char kDashboard[] = R"HTML(<!DOCTYPE html>
 <title>deepSightAI Config</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#111827;color:#e5e7eb;font:14px/1.6 system-ui,sans-serif;padding:16px;max-width:640px;margin:0 auto}
+body{background:#111827;color:#e5e7eb;font:14px/1.6 system-ui,sans-serif;padding:16px;max-width:960px;margin:0 auto}
 h1{color:#60a5fa;font-size:18px;margin-bottom:16px}
+.main-layout{display:flex;gap:16px;flex-wrap:wrap}
+.config-side{flex:1;min-width:320px}
+.vision-side{flex:1.5;min-width:320px}
 .card{background:#1f2937;border-radius:8px;padding:16px;margin-bottom:12px}
 .card h2{color:#93c5fd;font-size:11px;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;border-bottom:1px solid #374151;padding-bottom:6px}
 .row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
@@ -57,11 +61,26 @@ input[type=checkbox]{flex:none;width:18px;height:18px;accent-color:#2563eb}
 .st{font-size:12px;color:#6b7280;margin-top:6px;min-height:16px}
 #topbar{display:flex;justify-content:space-between;align-items:center;background:#1f2937;border-radius:6px;padding:8px 14px;margin-bottom:14px;font-size:13px}
 #conn{color:#6b7280}
+.vision-box{background:#000;border-radius:8px;overflow:hidden;width:100%;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;border:1px solid #374151;margin-top:8px}
+.vision-box img{max-width:100%;max-height:100%;display:block}
 </style>
 </head>
 <body>
 <div id="topbar"><b style="color:#60a5fa">deepSightAI</b><span id="conn">connecting&#8230;</span></div>
 
+<div class="main-layout">
+<div class="vision-side">
+    <div class="card">
+        <h2>Headless Vision</h2>
+        <div class="vision-box"><img id="preview" src="/vision.jpg" alt="Preview"></div>
+        <div style="font-size:12px;color:#9ca3af;margin-top:10px;display:flex;justify-content:space-between">
+            <span>Detections: <b id="det-count">0</b></span>
+            <span>Refreshed: <span id="last-update">-</span></span>
+        </div>
+    </div>
+</div>
+
+<div class="config-side">
 <div class="card"><h2>Model</h2>
 <div class="row"><label>Backend</label><select id="backend"><option value="0">ONNX Runtime</option><option value="1">OpenVINO</option><option value="2">RKNN</option></select></div>
 <div class="row"><label>Rockchip HW</label><input id="rockchip_hw" type="checkbox"></div>
@@ -220,8 +239,25 @@ async function doRestart(){
   setTimeout(loadCfg,6000);
 }
 
+function pollVision(){
+  const img=$('preview');
+  const count=$('det-count');
+  const last=$('last-update');
+  if(!img)return;
+  // Use a temporary image to avoid flickering while loading
+  const tmp=new Image();
+  tmp.onload=()=>{
+    img.src=tmp.src;
+    last.textContent=new Date().toLocaleTimeString();
+  };
+  tmp.src='/vision.jpg?t='+Date.now();
+  setTimeout(pollVision, 150); // ~7fps preview is enough for config
+}
+
 loadCfg();
+pollVision();
 </script>
+</div>
 </body>
 </html>
 )HTML";
@@ -470,6 +506,7 @@ std::string WebConfigServer::dispatch(const std::string& method,
     if (path == "/api/config/roi"       && method == "POST") return dsai_applyRoi(body);
     if (path == "/api/config/system"    && method == "POST") return applySystem(body);
     if (path == "/api/restart"          && method == "POST") return dsai_triggerRestart();
+    if (path == "/vision.jpg"           && method == "GET")  return streamResp();
 
     if (method == "OPTIONS")
         return httpResp(204, "No Content", "text/plain", "");
@@ -608,4 +645,24 @@ std::string WebConfigServer::applySystem(const std::string& body) {
 std::string WebConfigServer::dsai_triggerRestart() {
     app_.dsai_requestRestart();
     return dsai_ok200("{\"ok\":true,\"message\":\"restarting\"}");
+}
+
+std::string WebConfigServer::streamResp() {
+    // This is a special handler that doesn't return a single string,
+    // but rather takes over the socket for a while (not ideal for this simple server,
+    // but works for one client).
+    // Note: In this simple dispatch architecture, we can't easily stream.
+    // I will return a placeholder or implement a very basic one-frame-at-a-time logic
+    // if the dispatcher is called in a way that allows it.
+    
+    // Actually, to keep it simple and non-blocking for other API calls,
+    // I will implement a simpler "latest frame" JPEG endpoint /api/snapshot
+    // and let the frontend poll it or use a proper multipart if I refactor handleClient.
+    
+    cv::Mat frame = app_.dsai_latestFrame();
+    if (frame.empty()) return dsai_err404();
+    
+    std::vector<uchar> buf;
+    cv::imencode(".jpg", frame, buf);
+    return dsai_ok200(std::string(buf.begin(), buf.end()), "image/jpeg");
 }

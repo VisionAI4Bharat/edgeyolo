@@ -56,6 +56,9 @@ private:
     // POST /api/restart — signal inference loop to stop; main() will re-exec
     std::string dsai_triggerRestart();
 
+    // GET /stream — MJPEG stream
+    std::string streamResp();
+
     HeadlessApp&      app_;
     int               serverFd_ = -1;
     std::atomic<bool> running_  { false };

@@ -49,11 +49,40 @@ int HeadlessApp::run() {
     return restart_.load() ? 1 : 0;
 }
 
+void HeadlessApp::dsai_pushFrame(const cv::Mat& frame) {
+    std::lock_guard<std::mutex> lock(frameMutex_);
+    latestFrame_ = frame.clone();
+}
+
+cv::Mat HeadlessApp::dsai_latestFrame() {
+    std::lock_guard<std::mutex> lock(frameMutex_);
+    return latestFrame_.clone();
+}
+
 void HeadlessApp::dsai_runInferenceLoop() {
     Debug::dsai_setEnabled(cfg_.debugLogging);
 
     auto cap_ptr = deepSightAI::CaptureFactory::dsai_create();
     deepSightAI::ICapture& cap = *cap_ptr;
+    cap.dsai_setAppConfig(cfg_);
+
+    if (cfg_.modelFile.empty()) {
+        fprintf(stderr, "[HeadlessApp] No model file configured.\n");
+        return;
+    }
+
+    std::unique_ptr<inference::IDetector> detector;
+    try {
+        inference::Backend detBackend = static_cast<inference::Backend>(cfg_.backend);
+        detector = inference::DetectorFactory::dsai_create(detBackend, cfg_.modelFile, cfg_.yamlFile, cfg_.confThreshold, cfg_.nmsThreshold);
+        if (!cfg_.classLabels.empty()) detector->dsai_setClassLabels(cfg_.classLabels);
+        
+        cv::Size inputSize = detector->dsai_inputSize();
+        cap.dsai_setModelInputSize(inputSize.width, inputSize.height);
+    } catch (const std::exception& e) {
+        fprintf(stderr, "[HeadlessApp] Detector init failed: %s\n", e.what());
+        return;
+    }
 
     bool opened = false;
     if (cfg_.source == SourceType::VideoFile) {
@@ -76,21 +105,6 @@ void HeadlessApp::dsai_runInferenceLoop() {
     printf("[HeadlessApp] Capture open: %dx%d @ %.1ffps\n",
            cap.dsai_captureWidth(), cap.dsai_captureHeight(), cap.dsai_captureFps());
 
-    if (cfg_.modelFile.empty()) {
-        fprintf(stderr, "[HeadlessApp] No model file configured.\n");
-        return;
-    }
-
-    std::unique_ptr<inference::IDetector> detector;
-    try {
-        inference::Backend detBackend = static_cast<inference::Backend>(cfg_.backend);
-        detector = inference::DetectorFactory::dsai_create(detBackend, cfg_.modelFile, cfg_.yamlFile, cfg_.confThreshold, cfg_.nmsThreshold);
-        if (!cfg_.classLabels.empty()) detector->dsai_setClassLabels(cfg_.classLabels);
-    } catch (const std::exception& e) {
-        fprintf(stderr, "[HeadlessApp] Detector init failed: %s\n", e.what());
-        return;
-    }
-
     auto applyRoi = [&](const cv::Mat& frame) -> cv::Mat {
         if (!cfg_.roiEnabled || cfg_.roi.width <= 0 || cfg_.roi.height <= 0) return frame;
         cv::Rect r(cfg_.roi.x, cfg_.roi.y, cfg_.roi.width, cfg_.roi.height);
@@ -111,6 +125,14 @@ void HeadlessApp::dsai_runInferenceLoop() {
         
         cap.dsai_setOSD(detections);
 
+        // Draw for web stream preview (Headless Vision)
+        for (const auto& d : detections) {
+            cv::rectangle(frame, d.rect, cv::Scalar(0, 255, 0), 2);
+            std::string label = (d.classId < (int)cfg_.classLabels.size() ? cfg_.classLabels[d.classId] : std::to_string(d.classId));
+            cv::putText(frame, label, cv::Point(d.rect.x, d.rect.y - 5), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 1);
+        }
+        dsai_pushFrame(frame);
+
         frameN++;
         DBG_LOG("DETECTOR", "frame %llu: %zu detections\n", frameN, detections.size());
 
@@ -121,4 +143,5 @@ void HeadlessApp::dsai_runInferenceLoop() {
 
     cap.dsai_release();
 }
+
 

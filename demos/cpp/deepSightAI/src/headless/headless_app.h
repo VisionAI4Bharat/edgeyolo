@@ -25,6 +25,8 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <mutex>
+#include <opencv2/core.hpp>
 
 namespace inference { class IDetector; }
 
@@ -33,21 +35,19 @@ public:
     explicit HeadlessApp(const std::string& configPath = "");
     ~HeadlessApp();
 
-    // Run capture→infer loop in foreground until dsai_stop() is called.
-    // Returns exit code: 0 = clean exit, 1 = restart requested.
     int  run();
     void dsai_stop();
-
-    // Reload config from disk and restart the inference loop.
     void dsai_requestRestart();
 
-    // Config access (used by web server)
     AppConfig&       dsai_config()       { return cfg_; }
     const AppConfig& dsai_config() const { return cfg_; }
     const std::string& configPath() const { return configPath_; }
 
-    // Save current config and signal restart
     void dsai_applyAndRestart(const AppConfig& newCfg);
+
+    // Frame sharing for web stream
+    void dsai_pushFrame(const cv::Mat& frame);
+    cv::Mat dsai_latestFrame();
 
 private:
     void dsai_runInferenceLoop();
@@ -57,4 +57,7 @@ private:
 
     std::atomic<bool> running_  { false };
     std::atomic<bool> restart_  { false };
+
+    std::mutex frameMutex_;
+    cv::Mat    latestFrame_;
 };
