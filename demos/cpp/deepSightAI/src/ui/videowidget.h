@@ -9,6 +9,8 @@
 #include <QImage>
 #include <QPixmap>
 #include <QThread>
+#include <QWaitCondition>
+#include <atomic>
 #include <opencv2/core.hpp>
 #include "../inference/IDetector.h"
 #include "../capture/ICapture.h"
@@ -30,6 +32,9 @@ public:
     void dsai_setEditMode(bool edit);
     void dsai_clearRoi();
 
+    void dsai_startCaptureThread();
+    void dsai_stopCaptureThread();
+
 signals:
     void frameReady(const cv::Mat& frame);
     void boundingBoxChanged(const QRect& rect);
@@ -41,27 +46,34 @@ protected:
     void mouseReleaseEvent(QMouseEvent* event) override;
 
 private:
-    public:
-    void dsai_startCaptureThread();
-    void dsai_stopCaptureThread();
+    void dsai_updateFrame();
     QPointF dsai_widgetToImageCoordinates(const QPointF& widgetPos) const;
 
     std::unique_ptr<deepSightAI::ICapture> capture_;
     QMutex captureMutex_;
     QThread* captureThread_ = nullptr;
+    std::atomic<bool> running_{false};
 
     QMutex displayMutex_;
     cv::Mat currentFrame_;
+    cv::Mat displayFrame_;
+    QImage qtImage_;
     QPixmap qtPixmap_;
     cv::Size lastFrameSize_;
+    
+    QMutex resultsMutex_;
     std::vector<inference::Detection> detections_;
     
     bool isEditingRoi_ = false;
     bool isDrawingBox_ = false;
     QPoint boxStartPoint_;
     QPoint boxCurrentPoint_;
-    QRect currentRoi_;
+    QRect boundingBox_;
+    
     QStringList classNames_;
     bool isRockchip_ = false;
     QPixmap logoPixmap_;
+    
+    int cameraDeviceId_ = 0;
+    QString videoSourcePath_;
 };

@@ -40,7 +40,11 @@ std::vector<Detection> OpenVinoDetector::dsai_infer(const cv::Mat& frame) {
     PostProcessContext ctx;
     ctx.modelWidth = inputSize_.width; ctx.modelHeight = inputSize_.height;
     ctx.numClasses = numClasses_; ctx.classNames = classNames_;
-    for(size_t i=0; i<compiledModel_.outputs().size(); i++) {
+    
+    // Safety check for EdgeYOLO 9-tensor model
+    if (compiledModel_.outputs().size() < 9) return {};
+
+    for(size_t i=0; i < 9; i++) {
         const ov::Tensor& out = inferRequest_.get_output_tensor(i);
         ctx.outputFloats.push_back(out.data<const float>());
     }

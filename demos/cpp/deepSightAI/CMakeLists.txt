@@ -11,7 +11,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # ─── build options ────────────────────────────────────────────────────────────
 option(USE_QT5           "Use Qt5 instead of Qt6"                  OFF)
-option(BUILD_QT_GUI      "Build the Qt desktop GUI application"    OFF)
+option(BUILD_QT_GUI      "Build the Qt desktop GUI application"    ON)
 option(BUILD_HEADLESS    "Build the headless embedded application"  OFF)
 option(WITH_OPENVINO     "Enable OpenVINO inference backend"        ON)
 option(WITH_RKNN         "Enable RKNN inference backend"           OFF)

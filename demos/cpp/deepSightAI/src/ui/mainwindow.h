@@ -1,21 +1,5 @@
 /*
  * Copyright (C) 2026 swatah.ai. All rights reserved.
- *
- * This software is dual-licensed:
- * 1. GNU General Public License v3.0 (GPLv3)
- * 2. A proprietary license for commercial use.
- *
- * You may use this software under the terms of the GPLv3 if you are using it
- * for non-commercial purposes. For commercial usage, a separate commercial 
- * license must be obtained from swatah.ai (info@swatah.ai).
- *
- * This program is distributed in the hope that it will be useful, but 
- * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY 
- * or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License 
- * for more details.
- *
- * Trademarks: All trademarks, service marks, and logos are the property of 
- * their respective owners.
  */
 
 #ifndef MAINWINDOW_H
@@ -28,7 +12,6 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGroupBox>
-#include <QCheckBox>
 #include <QTimer>
 #include <QStatusBar>
 #include <QThread>
@@ -36,145 +19,74 @@
 #include <QWaitCondition>
 #include <QVector>
 #include <QString>
-#include <QMap>
-
-#include <memory>
 #include <deque>
+#include <memory>
 
 #include "videowidget.h"
 #include "configdialog.h"
 #include "inference/IDetector.h"
 #include "inference/DetectorFactory.h"
 
-// ─── DetectionWorker ──────────────────────────────────────────────────────────
-
-/**
- * Background thread that pulls frames from a queue, runs IDetector::dsai_infer(),
- * and emits results back to the GUI thread.
- *
- * Ownership: MainWindow owns the unique_ptr<IDetector>; DetectionWorker holds
- * a raw non-owning pointer.  The detector must not be destroyed while the
- * worker is running — always call dsai_stop() and wait() before swapping detectors.
- */
 class DetectionWorker : public QThread {
     Q_OBJECT
 public:
     explicit DetectionWorker(QObject* parent = nullptr);
     ~DetectionWorker() override;
-
-    /** Set the detector to use.  Must be called before dsai_start() or after dsai_stop(). */
     void dsai_setDetector(inference::IDetector* detector);
-
-    /** Push a new frame.  Thread-safe; wakes the worker if it was idle. */
     void dsai_pushFrame(const cv::Mat& frame);
-
-    /** Set active/paused state.  Thread-safe. */
     void dsai_setEnabled(bool enabled);
-
-    /** Signal the run loop to exit, then caller should call wait(). */
     void dsai_stop();
-
 signals:
-    void detectionResultsReady(QVector<QRect>  boxes,
-                                QVector<int>    classIds,
-                                QVector<float>  confidences);
-    void performanceMetricsUpdated(float fps,
-                                   float inferenceLatencyMs,
-                                   float nmsLatencyMs,
-                                   float avgLatencyMs);
-
+    void detectionResultsReady(const std::vector<inference::Detection>& detections);
+    void performanceMetricsUpdated(float fps, float inferMs, float nmsMs, float avgMs);
 protected:
     void run() override;
-
 private:
-    inference::IDetector* detector_  = nullptr;
-    cv::Mat               pendingFrame_;
-    bool                  frameReady_ = false;
-    bool                  enabled_    = false;
-    bool                  stopped_    = false;
-
-    QMutex          mutex_;
-    QWaitCondition  condition_;
-
-    // Latency rolling average (30 frames)
-    static constexpr int kHistorySize = 30;
+    inference::IDetector* detector_ = nullptr;
+    cv::Mat pendingFrame_;
+    bool frameReady_ = false;
+    bool enabled_ = false;
+    bool stopped_ = false;
+    QMutex mutex_;
+    QWaitCondition condition_;
     std::deque<float> latencyHistory_;
-
-    // FPS tracking — rolling EMA over inference latency for smooth display
-    float   emaFps_        = 0.f;
-    static constexpr float kFpsAlpha = 0.2f;  // EMA smoothing factor
 };
-
-// ─── MainWindow ───────────────────────────────────────────────────────────────
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
-    explicit MainWindow(QWidget* parent = nullptr);
-    ~MainWindow() override;
-
-    void dsai_loadFromConfigFile(const QString& configPath);
-
+    MainWindow(QWidget* parent = nullptr);
+    ~MainWindow();
+    void dsai_loadFromConfigFile(const QString& path);
 private slots:
     void dsai_openConfigDialog();
-    void dsai_onDetectionResults(QVector<QRect>  boxes,
-                            QVector<int>    classIds,
-                            QVector<float>  confidences);
-    void dsai_onPerformanceMetrics(float fps,
-                              float inferenceLatency,
-                              float nmsLatency,
-                              float avgLatency);
+    void dsai_toggleStartStop();
+    void dsai_onDetectionResults(const std::vector<inference::Detection>& detections);
+    void dsai_onPerformanceMetrics(float fps, float inferMs, float nmsMs, float avgMs);
     void dsai_updateClock();
-    void dsai_handleBoundingBoxChanged(const QRect& box);
-
+    void dsai_handleBoundingBoxChanged(const QRect& rect);
 private:
     void dsai_setupUI();
     void dsai_setupConnections();
-    void dsai_initializeDetector(inference::Backend  backend,
-                            const QString&      modelPath,
-                            const QString&      yamlPath,
-                            float               confThres,
-                            float               nmsThres,
-                            const QStringList&  classLabels = {});
-    void dsai_populateClassCheckboxes(const std::vector<std::string>& names);
+    void dsai_initializeDetector(inference::Backend backend, const QString& modelPath, const QString& yamlPath, float conf, float nms, const QStringList& labels);
     void dsai_startWorker();
     void dsai_stopWorker();
 
-    // ── UI ────────────────────────────────────────────────────────────────
-    QSplitter*    mainSplitter_   = nullptr;
-    VideoWidget*  videoWidget_    = nullptr;
-    QWidget*      controlPanel_   = nullptr;
-    QVBoxLayout*  controlLayout_  = nullptr;
+    VideoWidget* videoWidget_ = nullptr;
+    QPushButton* startStopBtn_ = nullptr;
+    QLabel* fpsLabel_ = nullptr;
+    QLabel* inferLatLabel_ = nullptr;
+    QLabel* nmsLatLabel_ = nullptr;
+    QLabel* avgLatLabel_ = nullptr;
+    QLabel* clockLabel_ = nullptr;
+    QStatusBar* statusBar_ = nullptr;
 
-    QPushButton*  configButton_   = nullptr;
-
-    QGroupBox*    metricsGroup_   = nullptr;
-    QLabel*       fpsLabel_       = nullptr;
-    QLabel*       inferLatLabel_  = nullptr;
-    QLabel*       nmsLatLabel_    = nullptr;
-    QLabel*       avgLatLabel_    = nullptr;
-    QLabel*       timeLabel_      = nullptr;
-
-    QGroupBox*    objectsGroup_   = nullptr;
-    QVBoxLayout*  objectsLayout_  = nullptr;
-    QMap<int, QCheckBox*> classCheckboxes_; // classId -> checkbox
-
-    QStatusBar*   statusBar_      = nullptr;
-
-    // ── state ─────────────────────────────────────────────────────────────
-    QString  modelFilePath_;
-    QString  yamlFilePath_;
-    QString  roiConfigPath_;   // YAML file where ROI is persisted
-    bool     isUsingVideoFile_  = false;
-    bool     isUsingRtspStream_ = false;
-    bool     debugLogging_      = false;
-    QRect    currentBoundingBox_;
-
-    // ── detection ─────────────────────────────────────────────────────────
     std::unique_ptr<inference::IDetector> detector_;
-    QMutex                                detectorMutex_;
-    DetectionWorker*                      worker_  = nullptr;
-    QTimer*                               clockTimer_ = nullptr;
+    DetectionWorker* worker_ = nullptr;
+    QString modelFilePath_;
+    QString yamlFilePath_;
+    QString roiConfigPath_;
+    bool isRunning_ = false;
 };
 
-#endif // MAINWINDOW_H
+#endif

@@ -21,6 +21,7 @@ public:
 
     /** Open platform camera with requested params. */
     virtual bool dsai_openCamera(int devId, int width, int height, double fps) = 0;
+    virtual bool dsai_openSource(const std::string& path) = 0;
     
     /** Open network RTSP/RTMP stream. */
     

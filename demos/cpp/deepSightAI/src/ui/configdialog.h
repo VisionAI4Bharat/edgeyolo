@@ -119,6 +119,7 @@ private:
     bool dsai_validateInputs(QString& errorMsg) const;
     void dsai_loadConfig();
     void dsai_saveConfig();
+    public:
     static QString dsai_configFilePath();
 
     // — Backend section —

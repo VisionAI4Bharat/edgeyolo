@@ -130,7 +130,7 @@ bool RV1106Capture::dsai_openCamera(int devId, int width, int height, double fps
         ca.stSize.u32Width = pImpl_->modelW; ca.stSize.u32Height = pImpl_->modelH; ca.u32Depth = 2;
         CHECK_RET(RK_MPI_VI_SetChnAttr(0, 1, &ca), "VI C1 Attr");
         CHECK_RET(RK_MPI_VI_EnableChn(0, 1), "VI C1 Enable");
-        VENC_CHN_ATTR_S va; memset(&ca, 0, sizeof(va)); va.stVencAttr.enType = RK_VIDEO_ID_HEVC;
+        VENC_CHN_ATTR_S va; memset(&va, 0, sizeof(va)); va.stVencAttr.enType = RK_VIDEO_ID_HEVC;
         va.stVencAttr.u32MaxPicWidth = width; va.stVencAttr.u32MaxPicHeight = height;
         va.stVencAttr.u32PicWidth = width; va.stVencAttr.u32PicHeight = height;
         va.stVencAttr.u32BufSize = width*height*3/2; va.stRcAttr.enRcMode = VENC_RC_MODE_H265CBR;
@@ -164,6 +164,8 @@ bool RV1106Capture::dsai_openCamera(int devId, int width, int height, double fps
         pImpl_->isOpen = true; return true;
     } catch(const std::exception& e) { pImpl_->setError(e.what()); return false; }
 }
+
+bool RV1106Capture::dsai_openSource(const std::string&) { return false; }
 
 bool RV1106Capture::dsai_read(cv::Mat& frame) {
     std::lock_guard<std::mutex> l(pImpl_->frameMutex);

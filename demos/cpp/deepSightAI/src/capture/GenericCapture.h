@@ -22,6 +22,7 @@ public:
     ~GenericCapture() override;
 
     bool dsai_openCamera(int devId, int width, int height, double fps) override;
+    bool dsai_openSource(const std::string& path) override;
     bool dsai_read(cv::Mat& frame) override;
     void dsai_release() override;
     bool dsai_isOpened() const override;
