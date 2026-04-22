@@ -12,6 +12,7 @@
 #include <QWaitCondition>
 #include <atomic>
 #include <opencv2/core.hpp>
+#include "../app_config.h"
 #include "../inference/IDetector.h"
 #include "../capture/ICapture.h"
 #include "../capture/CaptureFactory.h"
