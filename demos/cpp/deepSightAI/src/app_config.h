@@ -55,4 +55,7 @@ struct AppConfig {
     static AppConfig dsai_loadFromFile(const std::string& path);
     void dsai_saveToFile(const std::string& path) const;
     static std::string dsai_defaultPath();
+
+    std::string dsai_logConfigToString() const;
+    void        dsai_logConfig() const;
 };

@@ -19,10 +19,13 @@
  */
 
 #include "app_config.h"
+#include "debug_log.h"
 
 #include <yaml-cpp/yaml.h>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
+namespace fs = std::filesystem;
 
 // ── resolution / fps lookup tables (match ConfigDialog combos exactly) ────────
 static const int kWidths[]  = { 640, 1280, 1920, 320,  416 };
@@ -44,13 +47,13 @@ int AppConfig::dsai_fps() const {
 
 std::string AppConfig::dsai_defaultPath() {
 #ifdef __arm__
-    if (std::filesystem::exists("/etc/deepSightAI/config.yaml"))
+    if (fs::exists("/etc/deepSightAI/config.yaml"))
         return "/etc/deepSightAI/config.yaml";
 #endif
     const char* xdg = std::getenv("XDG_CONFIG_HOME");
     std::string base = xdg ? xdg : (std::string(std::getenv("HOME") ? std::getenv("HOME") : "/root") + "/.config");
     std::string dir = base + "/deepSightAI";
-    if (!std::filesystem::exists(dir)) std::filesystem::create_directories(dir);
+    if (!fs::exists(dir)) fs::create_directories(dir);
     return dir + "/config.yaml";
 }
 
@@ -122,7 +125,7 @@ void AppConfig::dsai_saveToFile(const std::string& path) const {
     // Ensure parent directory exists
     std::string dir = path.substr(0, path.rfind('/'));
     if (!dir.empty())
-        std::filesystem::create_directories(dir);
+        fs::create_directories(dir);
 
     YAML::Node n;
     n["backend"]          = static_cast<int>(backend);
@@ -165,4 +168,62 @@ void AppConfig::dsai_saveToFile(const std::string& path) const {
     std::ofstream ofs(path);
     if (!ofs) throw std::runtime_error("AppConfig: cannot write '" + path + "'");
     ofs << n;
+}
+
+std::string AppConfig::dsai_logConfigToString() const {
+    static const char* kBackendNames[] = {"ONNX Runtime", "OpenVINO", "RKNN"};
+    static const char* kSourceNames[]  = {"Camera", "VideoFile", "RTSP"};
+
+    int bi = static_cast<int>(backend);
+    int si = static_cast<int>(source);
+    const char* backendStr = (bi >= 0 && bi < 3) ? kBackendNames[bi] : "Unknown";
+    const char* sourceStr  = (si >= 0 && si < 3) ? kSourceNames[si]  : "Unknown";
+
+    std::ostringstream o;
+    char buf[128];
+
+    o << "--- active configuration ---\n";
+    o << "  Backend    : " << backendStr << "\n";
+    o << "  Model      : " << (modelFile.empty() ? "(none)"  : modelFile) << "\n";
+    o << "  YAML       : " << (yamlFile.empty()  ? "(auto)"  : yamlFile)  << "\n";
+
+    snprintf(buf, sizeof(buf), "conf=%.2f  nms=%.2f", confThreshold, nmsThreshold);
+    o << "  Thresholds : " << buf << "\n";
+
+    if (!classLabels.empty()) {
+        o << "  Classes    : [";
+        for (size_t i = 0; i < classLabels.size(); ++i) {
+            if (i) o << ", ";
+            o << classLabels[i];
+        }
+        o << "]\n";
+    }
+
+    o << "  Source     : " << sourceStr;
+    if (source == SourceType::Camera) {
+        snprintf(buf, sizeof(buf), "  device=%d  %dx%d @ %dfps",
+                 cameraDeviceId, dsai_width(), dsai_height(), dsai_fps());
+        o << buf;
+    } else if (source == SourceType::VideoFile) {
+        o << "  " << videoFile;
+    } else if (source == SourceType::Rtsp) {
+        o << "  " << rtspUrl;
+    }
+    o << "\n";
+
+    if (roiEnabled) {
+        snprintf(buf, sizeof(buf), "x=%d y=%d w=%d h=%d",
+                 roi.x, roi.y, roi.width, roi.height);
+        o << "  ROI        : " << buf << "\n";
+    } else {
+        o << "  ROI        : disabled\n";
+    }
+
+    o << "  Web port   : " << webPort << "\n";
+    o << "---";
+    return o.str();
+}
+
+void AppConfig::dsai_logConfig() const {
+    DBG_LOG("CONFIG", "\n%s\n", dsai_logConfigToString().c_str());
 }

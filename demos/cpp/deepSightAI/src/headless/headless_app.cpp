@@ -67,6 +67,7 @@ cv::Mat HeadlessApp::dsai_latestFrame() {
 
 void HeadlessApp::dsai_runInferenceLoop() {
     Debug::dsai_setEnabled(cfg_.debugLogging);
+    cfg_.dsai_logConfig();
 
     auto cap_ptr = deepSightAI::CaptureFactory::dsai_create();
     deepSightAI::ICapture& cap = *cap_ptr;

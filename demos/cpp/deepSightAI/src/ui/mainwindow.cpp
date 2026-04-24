@@ -162,6 +162,7 @@ void MainWindow::dsai_loadFromConfigFile(const QString& path) {
 
     AppConfig cfg = AppConfig::dsai_loadFromFile(path.toStdString());
     Debug::dsai_setEnabled(cfg.debugLogging);
+    cfg.dsai_logConfig();
 
     modelFilePath_ = QString::fromStdString(cfg.modelFile);
     yamlFilePath_ = QString::fromStdString(cfg.yamlFile);
