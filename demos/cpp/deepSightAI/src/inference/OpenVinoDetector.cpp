@@ -22,20 +22,12 @@ void OpenVinoDetector::dsai_load(const std::string& path, float c, float n) {
 }
 std::vector<Detection> OpenVinoDetector::dsai_infer(const cv::Mat& frame) {
     if (!loaded_) return {};
-    cv::Mat hwcBGR(inputSize_, CV_8UC3);
-    PreProcessContext pctx; pctx.targetWidth=inputSize_.width; pctx.targetHeight=inputSize_.height;
-    pctx.dstBuffer=hwcBGR.data; pctx.dstSize=hwcBGR.total()*hwcBGR.elemSize();
+    PreProcessContext pctx;
+    pctx.targetWidth = inputSize_.width; pctx.targetHeight = inputSize_.height;
+    pctx.dstBuffer = inputBlob_.data(); pctx.dstSize = inputBlob_.size() * sizeof(float);
+    pctx.outputCHW = true;
     preProcessor_->dsai_process(frame, pctx);
 
-    const int plane = inputSize_.width * inputSize_.height;
-    for(int h=0; h<inputSize_.height; h++) {
-        for(int w=0; w<inputSize_.width; w++) {
-            cv::Vec3b pix = hwcBGR.at<cv::Vec3b>(h,w);
-            inputBlob_[0*plane + h*inputSize_.width + w] = (float)pix[0]; // B
-            inputBlob_[1*plane + h*inputSize_.width + w] = (float)pix[1]; // G
-            inputBlob_[2*plane + h*inputSize_.width + w] = (float)pix[2]; // R
-        }
-    }
     ov::Tensor inputTensor(ov::element::f32, {1, 3, (size_t)inputSize_.height, (size_t)inputSize_.width}, inputBlob_.data());
     inferRequest_.set_input_tensor(inputTensor); inferRequest_.infer();
     

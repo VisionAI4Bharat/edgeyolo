@@ -224,7 +224,7 @@ void DetectionWorker::run() {
             float fps = 1000.0f / avgMs;
             frameCount++; auto now = steady_clock::now();
             if (duration_cast<seconds>(now - lastHeartbeat).count() >= 1) {
-                DBG_LOG("WORKER", "Heartbeat: FPS=%.1f, TotalFrames=%llu\n", (double)fps, (unsigned long long)frameCount);
+                DBG_LOG("FPS", "FPS=%.1f  infer_avg=%.1fms  frame=%llu\n", fps, avgMs, (unsigned long long)frameCount);
                 lastHeartbeat = now;
             }
             if (Debug::isEnabled()) {

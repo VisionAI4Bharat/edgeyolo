@@ -16,6 +16,7 @@
 #include <cstdio>
 #include <cstring>
 #include <chrono>
+#include <deque>
 #include <thread>
 
 HeadlessApp::HeadlessApp(const std::string& configPath)
@@ -118,6 +119,8 @@ void HeadlessApp::dsai_runInferenceLoop() {
     };
 
     unsigned long long frameN = 0;
+    std::deque<float> inferHistory;
+    auto lastFpsPrint = std::chrono::steady_clock::now();
     cv::Mat frame;
     while (running_) {
         if (!cap.dsai_read(frame) || frame.empty()) {
@@ -126,8 +129,23 @@ void HeadlessApp::dsai_runInferenceLoop() {
         }
 
         cv::Mat roi = applyRoi(frame);
+
+        auto t0 = std::chrono::steady_clock::now();
         auto detections = detector->dsai_infer(roi);
-        
+        auto t1 = std::chrono::steady_clock::now();
+        float inferMs = std::chrono::duration<float, std::milli>(t1 - t0).count();
+        inferHistory.push_back(inferMs);
+        if (inferHistory.size() > 30) inferHistory.pop_front();
+        float sum = 0.0f; for (float v : inferHistory) sum += v;
+        float avgMs = sum / inferHistory.size();
+        float fps = 1000.0f / avgMs;
+
+        auto now = std::chrono::steady_clock::now();
+        if (std::chrono::duration_cast<std::chrono::seconds>(now - lastFpsPrint).count() >= 1) {
+            DBG_LOG("FPS", "FPS=%.1f  infer_avg=%.1fms  frame=%llu\n", fps, avgMs, frameN);
+            lastFpsPrint = now;
+        }
+
         // Filter detections
         std::vector<inference::Detection> filtered;
         for (const auto& d : detections) {
@@ -148,10 +166,6 @@ void HeadlessApp::dsai_runInferenceLoop() {
 
         frameN++;
         DBG_LOG("DETECTOR", "frame %llu: %zu detections\n", frameN, filtered.size());
-
-        if (frameN % 100 == 0) {
-            printf("[HeadlessApp] Frame %llu, detections=%zu\n", frameN, filtered.size());
-        }
     }
 
     cap.dsai_release();

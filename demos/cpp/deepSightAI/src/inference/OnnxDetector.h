@@ -29,6 +29,9 @@ private:
     float nmsThres_ = 0.45f;
     bool loaded_ = false;
     std::string yamlPath_;
+    std::vector<float> inputBlob_;
+    std::string inputName_;
+    std::string outputName_;
 };
 
 }

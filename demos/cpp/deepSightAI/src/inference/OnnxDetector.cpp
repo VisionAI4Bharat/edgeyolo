@@ -10,40 +10,37 @@ void OnnxDetector::dsai_load(const std::string& path, float c, float n) {
     confThres_ = c; nmsThres_ = n; loadYaml(path);
     Ort::SessionOptions so; so.SetIntraOpNumThreads(std::thread::hardware_concurrency());
     session_ = std::make_unique<Ort::Session>(env_, path.c_str(), so);
-    
+
     auto typeInfo = session_->GetInputTypeInfo(0);
-    auto tensorInfo = typeInfo.GetTensorTypeAndShapeInfo();
-    auto shape = tensorInfo.GetShape();
+    auto shape = typeInfo.GetTensorTypeAndShapeInfo().GetShape();
     if (shape.size() == 4) {
-        // NCHW or NHWC check (EdgeYOLO is NCHW)
-        inputSize_ = cv::Size((int)shape[3], (int)shape[2]);
+        inputSize_ = cv::Size((int)shape[3], (int)shape[2]); // NCHW
     }
 
-    DBG_LOG("ONNX", "Model input: %dx%d, Classes: %d\n", inputSize_.width, inputSize_.height, numClasses_);
+    Ort::AllocatorWithDefaultOptions alloc;
+    inputName_  = std::string(session_->GetInputNameAllocated(0, alloc).get());
+    outputName_ = std::string(session_->GetOutputNameAllocated(0, alloc).get());
+
+    inputBlob_.assign(3 * inputSize_.width * inputSize_.height, 0.0f);
+    DBG_LOG("ONNX", "Model input: %dx%d  classes: %d  in: '%s'  out: '%s'\n",
+            inputSize_.width, inputSize_.height, numClasses_, inputName_.c_str(), outputName_.c_str());
     preProcessor_  = std::make_unique<EdgeYoloPreProcessor>();
     postProcessor_ = std::make_unique<EdgeYoloPostProcessor>();
     loaded_ = true;
 }
 std::vector<Detection> OnnxDetector::dsai_infer(const cv::Mat& frame) {
     if (!loaded_) return {};
-    cv::Mat hwcBGR(inputSize_, CV_8UC3);
-    PreProcessContext pctx; pctx.targetWidth=inputSize_.width; pctx.targetHeight=inputSize_.height;
-    pctx.dstBuffer=hwcBGR.data; pctx.dstSize=hwcBGR.total()*hwcBGR.elemSize();
+    PreProcessContext pctx;
+    pctx.targetWidth = inputSize_.width; pctx.targetHeight = inputSize_.height;
+    pctx.dstBuffer = inputBlob_.data(); pctx.dstSize = inputBlob_.size() * sizeof(float);
+    pctx.outputCHW = true;
     preProcessor_->dsai_process(frame, pctx);
-    std::vector<float> inputBlob(1*3*inputSize_.width*inputSize_.height);
-    const int plane = inputSize_.width * inputSize_.height;
-    for(int h=0; h<inputSize_.height; h++) {
-        for(int w=0; w<inputSize_.width; w++) {
-            cv::Vec3b pix = hwcBGR.at<cv::Vec3b>(h,w);
-            inputBlob[0*plane + h*inputSize_.width + w] = (float)pix[0]; // B
-            inputBlob[1*plane + h*inputSize_.width + w] = (float)pix[1]; // G
-            inputBlob[2*plane + h*inputSize_.width + w] = (float)pix[2]; // R
-        }
-    }
+
     auto mi = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
     std::vector<int64_t> ishape = {1, 3, (int64_t)inputSize_.height, (int64_t)inputSize_.width};
-    Ort::Value itensor = Ort::Value::CreateTensor<float>(mi, inputBlob.data(), inputBlob.size(), ishape.data(), ishape.size());
-    const char* inames[] = {"images"}; const char* onames[] = {"output"}; // Assuming fused head name is 'output'
+    Ort::Value itensor = Ort::Value::CreateTensor<float>(mi, inputBlob_.data(), inputBlob_.size(), ishape.data(), ishape.size());
+    const char* inames[] = {inputName_.c_str()};
+    const char* onames[] = {outputName_.c_str()};
     auto outputs = session_->Run(Ort::RunOptions{nullptr}, inames, &itensor, 1, onames, 1);
     PostProcessContext ctx;
     ctx.data = outputs[0].GetTensorData<float>();
