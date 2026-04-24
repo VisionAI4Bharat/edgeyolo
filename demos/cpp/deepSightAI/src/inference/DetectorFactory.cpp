@@ -32,7 +32,42 @@
 #  include "RknnDetector.h"
 #endif
 
+#include <algorithm>
+
 namespace inference {
+
+static std::string dsai_fileExtension(const std::string& path) {
+    auto pos = path.rfind('.');
+    if (pos == std::string::npos) return {};
+    std::string ext = path.substr(pos + 1);
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+    return ext;
+}
+
+void DetectorFactory::dsai_validateModelExtension(Backend backend, const std::string& modelPath) {
+    const std::string ext = dsai_fileExtension(modelPath);
+    bool ok = false;
+    const char* expected = nullptr;
+    switch (backend) {
+        case Backend::ONNX:
+            ok = (ext == "onnx");
+            expected = ".onnx";
+            break;
+        case Backend::OPENVINO:
+            ok = (ext == "xml" || ext == "bin");
+            expected = ".xml";
+            break;
+        case Backend::RKNN:
+            ok = (ext == "rknn");
+            expected = ".rknn";
+            break;
+    }
+    if (!ok)
+        throw std::runtime_error(
+            std::string("DetectorFactory: model file '") + modelPath +
+            "' has extension '." + ext + "' which does not match backend '" +
+            DetectorFactory::dsai_name(backend) + "' (expected " + expected + ").");
+}
 
 const char* DetectorFactory::dsai_name(Backend backend) noexcept
 {
@@ -79,6 +114,8 @@ std::unique_ptr<IDetector> DetectorFactory::dsai_create(Backend            backe
         throw std::runtime_error(
             std::string("DetectorFactory: backend '") + dsai_name(backend) +
             "' was not compiled into this binary.");
+
+    dsai_validateModelExtension(backend, modelPath);
 
     std::unique_ptr<IDetector> detector;
 

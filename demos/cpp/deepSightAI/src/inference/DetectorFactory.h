@@ -70,6 +70,13 @@ public:
 
     /** Human-readable name for a backend enum value. */
     static const char* dsai_name(Backend backend) noexcept;
+
+    /**
+     * Validates that modelPath's extension is compatible with backend.
+     * Throws std::runtime_error with a descriptive message if not.
+     * Called internally by dsai_create; also available for pre-flight checks.
+     */
+    static void dsai_validateModelExtension(Backend backend, const std::string& modelPath);
 };
 
 } // namespace inference

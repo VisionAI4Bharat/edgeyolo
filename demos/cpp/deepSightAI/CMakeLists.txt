@@ -4,6 +4,7 @@
 # See LICENSE for details.
 
 cmake_minimum_required(VERSION 3.16)
+cmake_policy(SET CMP0135 NEW)
 project(deepSightAI LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -332,4 +333,11 @@ endif()
 # ─── thirdparty cache dir ─────────────────────────────────────────────────────
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/thirdparty")
     file(MAKE_DIRECTORY "${PROJECT_SOURCE_DIR}/thirdparty")
+endif()
+
+# ─── tests ────────────────────────────────────────────────────────────────────
+option(BUILD_TESTS "Build unit tests" ON)
+if(BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
 endif()
