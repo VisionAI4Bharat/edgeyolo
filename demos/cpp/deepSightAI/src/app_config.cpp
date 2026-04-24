@@ -24,8 +24,149 @@
 #include <yaml-cpp/yaml.h>
 #include <filesystem>
 #include <fstream>
+#include <set>
 #include <sstream>
 namespace fs = std::filesystem;
+
+// ─── comment-preserving YAML patch ───────────────────────────────────────────
+//
+// Walks the original file text line by line and replaces only the value side
+// of key:value lines using a YAML::Node as the source of truth. Comments,
+// blank lines, and unknown keys are copied verbatim. Keys absent from the
+// original are appended at the end. Completely key-name agnostic — if new
+// fields are added to dsai_saveToFile they are automatically handled.
+
+static std::string scalarStr(const YAML::Node& n) {
+    YAML::Emitter em; em << n; return em.c_str();
+}
+
+// Replace the value portion of a YAML scalar line, preserving key and any
+// trailing inline comment (e.g. "  backend: 1  # 0=ONNX").
+static std::string patchValue(const std::string& line, const std::string& newVal) {
+    size_t colon = line.find(':');
+    if (colon == std::string::npos) return line;
+    size_t vs = colon + 1;
+    while (vs < line.size() && line[vs] == ' ') vs++;
+    std::string prefix = line.substr(0, vs);
+    bool inQ = false;
+    size_t cpos = std::string::npos;
+    for (size_t i = vs; i < line.size(); i++) {
+        if (line[i] == '"') inQ = !inQ;
+        if (!inQ && line[i] == '#' && i > 0 && line[i-1] == ' ') { cpos = i; break; }
+    }
+    return cpos != std::string::npos
+        ? prefix + newVal + "  " + line.substr(cpos)
+        : prefix + newVal;
+}
+
+static std::string patchYamlText(const std::string& orig, const YAML::Node& desired) {
+    auto keyOf = [](const std::string& ln) -> std::string {
+        size_t s = ln.find_first_not_of(' ');
+        if (s == std::string::npos || ln[s] == '#' || ln[s] == '-') return {};
+        size_t c = ln.find(':', s);
+        if (c == std::string::npos) return {};
+        std::string k = ln.substr(s, c - s);
+        while (!k.empty() && k.back() == ' ') k.pop_back();
+        return k;
+    };
+    auto indentOf = [](const std::string& ln) {
+        int i = 0; while (i < (int)ln.size() && ln[i] == ' ') i++; return i;
+    };
+    auto blankOrComment = [](const std::string& ln) {
+        size_t s = ln.find_first_not_of(' ');
+        return s == std::string::npos || ln[s] == '#';
+    };
+    auto isSeqItem = [](const std::string& ln) {
+        size_t s = ln.find_first_not_of(' ');
+        return s != std::string::npos && ln[s] == '-';
+    };
+    auto emitSeq = [&](std::ostringstream& out, const std::string& k) {
+        out << k << ":\n";
+        for (const auto& item : desired[k]) out << "  - " << scalarStr(item) << "\n";
+    };
+
+    std::set<std::string> seen;
+    enum class St { Normal, InMap, SkipSeq };
+    St state = St::Normal;
+    std::string seqKey, mapKey;
+    std::ostringstream out;
+    std::istringstream iss(orig);
+    std::string line;
+
+    while (std::getline(iss, line)) {
+        if (state == St::SkipSeq) {
+            if (isSeqItem(line)) continue;
+            emitSeq(out, seqKey);
+            state = St::Normal;
+        }
+
+        if (state == St::Normal) {
+            if (blankOrComment(line)) { out << line << "\n"; continue; }
+            std::string k = keyOf(line);
+            if (k.empty()) { out << line << "\n"; continue; }
+            if (indentOf(line) == 0) {
+                if (!desired[k]) {
+                    out << line << "\n";
+                } else if (desired[k].IsScalar()) {
+                    seen.insert(k);
+                    out << patchValue(line, scalarStr(desired[k])) << "\n";
+                } else if (desired[k].IsSequence()) {
+                    seen.insert(k); seqKey = k; state = St::SkipSeq;
+                } else if (desired[k].IsMap()) {
+                    seen.insert(k); mapKey = k; state = St::InMap;
+                    out << line << "\n";
+                } else {
+                    out << line << "\n";
+                }
+            } else {
+                out << line << "\n";
+            }
+        } else if (state == St::InMap) {
+            if (blankOrComment(line)) { out << line << "\n"; continue; }
+            std::string k = keyOf(line);
+            if (k.empty()) { out << line << "\n"; continue; }
+            if (indentOf(line) == 0) {
+                state = St::Normal;
+                if (!desired[k]) {
+                    out << line << "\n";
+                } else if (desired[k].IsScalar()) {
+                    seen.insert(k);
+                    out << patchValue(line, scalarStr(desired[k])) << "\n";
+                } else if (desired[k].IsSequence()) {
+                    seen.insert(k); seqKey = k; state = St::SkipSeq;
+                } else if (desired[k].IsMap()) {
+                    seen.insert(k); mapKey = k; state = St::InMap;
+                    out << line << "\n";
+                } else {
+                    out << line << "\n";
+                }
+            } else {
+                if (desired[mapKey] && desired[mapKey][k]) {
+                    out << patchValue(line, scalarStr(desired[mapKey][k])) << "\n";
+                } else {
+                    out << line << "\n";
+                }
+            }
+        }
+    }
+    if (state == St::SkipSeq) emitSeq(out, seqKey);
+
+    // Append top-level keys from desired not found in the original
+    for (auto it = desired.begin(); it != desired.end(); ++it) {
+        std::string k = it->first.as<std::string>();
+        if (seen.count(k)) continue;
+        if (it->second.IsScalar()) {
+            out << k << ": " << scalarStr(it->second) << "\n";
+        } else if (it->second.IsSequence()) {
+            emitSeq(out, k);
+        } else if (it->second.IsMap()) {
+            out << k << ":\n";
+            for (auto jt = it->second.begin(); jt != it->second.end(); ++jt)
+                out << "  " << jt->first.as<std::string>() << ": " << scalarStr(jt->second) << "\n";
+        }
+    }
+    return out.str();
+}
 
 // ── resolution / fps lookup tables (match ConfigDialog combos exactly) ────────
 static const int kWidths[]  = { 640, 1280, 1920, 320,  416 };
@@ -147,8 +288,7 @@ void AppConfig::dsai_saveToFile(const std::string& path) const {
     n["rockchip_hw"]      = rockchipHw;
     n["web_port"]         = webPort;
     n["debug_logging"]    = debugLogging;
-    n["rtsp_port"]         = rtspPort;
-    n["rtsp_port"]         = rtspPort;
+    n["rtsp_port"]        = rtspPort;
 
     YAML::Node roiNode;
     roiNode["x"]      = roi.x;
@@ -165,9 +305,19 @@ void AppConfig::dsai_saveToFile(const std::string& path) const {
     for (int id : hiddenClassIds) hidden.push_back(id);
     n["hidden_class_ids"] = hidden;
 
-    std::ofstream ofs(path);
-    if (!ofs) throw std::runtime_error("AppConfig: cannot write '" + path + "'");
-    ofs << n;
+    // If the file already exists, patch it in-place to preserve comments.
+    // Fall back to a fresh write when no prior file is present.
+    if (fs::exists(path)) {
+        std::string orig;
+        { std::ifstream ifs(path); std::ostringstream ss; ss << ifs.rdbuf(); orig = ss.str(); }
+        std::ofstream ofs(path);
+        if (!ofs) throw std::runtime_error("AppConfig: cannot write '" + path + "'");
+        ofs << patchYamlText(orig, n);
+    } else {
+        std::ofstream ofs(path);
+        if (!ofs) throw std::runtime_error("AppConfig: cannot write '" + path + "'");
+        ofs << n;
+    }
 }
 
 std::string AppConfig::dsai_logConfigToString() const {
