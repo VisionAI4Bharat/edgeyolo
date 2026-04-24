@@ -2,6 +2,13 @@
 # DetectorFactory.cpp is compiled here WITHOUT WITH_ONNXRT / WITH_OPENVINO /
 # WITH_RKNN so the linker needs nothing except yaml-cpp and the C++ stdlib.
 
+# Link stdc++fs if using GCC < 9 (required for std::filesystem)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
+    set(FS_LIB stdc++fs)
+else()
+    set(FS_LIB "")
+endif()
+
 add_executable(test_extension_check
     test_extension_check.cpp
     ../src/inference/DetectorFactory.cpp
@@ -15,6 +22,7 @@ target_include_directories(test_extension_check PRIVATE
 
 target_link_libraries(test_extension_check PRIVATE
     yaml-cpp::yaml-cpp
+    ${FS_LIB}
 )
 
 add_test(NAME ExtensionCheck COMMAND test_extension_check)
@@ -33,6 +41,7 @@ target_include_directories(test_config_log PRIVATE
 
 target_link_libraries(test_config_log PRIVATE
     yaml-cpp::yaml-cpp
+    ${FS_LIB}
 )
 
 add_test(NAME ConfigLog COMMAND test_config_log)
@@ -52,6 +61,7 @@ target_include_directories(test_comment_preservation PRIVATE
 
 target_link_libraries(test_comment_preservation PRIVATE
     yaml-cpp::yaml-cpp
+    ${FS_LIB}
 )
 
 add_test(NAME CommentPreservation COMMAND test_comment_preservation)

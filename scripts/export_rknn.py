@@ -129,7 +129,7 @@ def convert_to_rknn(
         mean_values=[list(mean_values)],
         std_values=[list(std_values)],
         target_platform=target,
-        quantized_dtype="asymmetric_quantized_u8",  # standard INT8 quant
+        quantized_dtype="w8a8",  # INT8 weights + INT8 activations (rknn-toolkit2 2.x)
         quantized_algorithm="normal",
         optimization_level=3,
     )
