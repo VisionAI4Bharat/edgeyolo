@@ -140,9 +140,9 @@ std::unique_ptr<IDetector> DetectorFactory::dsai_create(Backend            backe
 #endif
 #ifdef WITH_RKNN
         case Backend::RKNN: {
-            // RKNN::YOLO reads its own sidecar YAML internally based on modelPath;
-            // the yamlPath parameter is unused for RKNN (it must sit next to the .rknn).
-            detector = std::make_unique<RknnDetector>();
+            auto d = std::make_unique<RknnDetector>();
+            if (!yamlPath.empty()) d->dsai_setYamlPath(yamlPath);
+            detector = std::move(d);
             break;
         }
 #endif

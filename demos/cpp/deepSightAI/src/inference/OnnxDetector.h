@@ -1,7 +1,6 @@
 #pragma once
 #include "IDetector.h"
 #include <onnxruntime_cxx_api.h>
-#include <yaml-cpp/yaml.h>
 
 namespace inference {
 
@@ -19,7 +18,6 @@ public:
     void dsai_setYamlPath(const std::string& path) override { yamlPath_ = path; }
 
 private:
-    void loadYaml(const std::string& modelPath);
     Ort::Env env_;
     std::unique_ptr<Ort::Session> session_;
     cv::Size inputSize_{0, 0};

@@ -1,7 +1,6 @@
 #pragma once
 #include "IDetector.h"
 #include <openvino/openvino.hpp>
-#include <yaml-cpp/yaml.h>
 
 namespace inference {
 
@@ -19,7 +18,6 @@ public:
     void dsai_setYamlPath(const std::string& path) override { yamlPath_ = path; }
 
 private:
-    void loadYaml(const std::string& modelPath);
     ov::Core core_;
     ov::CompiledModel compiledModel_;
     ov::InferRequest inferRequest_;
