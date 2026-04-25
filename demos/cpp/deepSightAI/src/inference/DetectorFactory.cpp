@@ -123,10 +123,23 @@ std::unique_ptr<IDetector> DetectorFactory::dsai_create(Backend            backe
                                                     float              confThres,
                                                     float              nmsThres)
 {
-    if (!dsai_isAvailable(backend))
+    if (!dsai_isAvailable(backend)) {
+        // Hint at the correct backend if the model extension gives it away
+        const std::string ext = [&]{
+            auto p = modelPath.rfind('.');
+            if (p == std::string::npos) return std::string{};
+            std::string e = modelPath.substr(p + 1);
+            std::transform(e.begin(), e.end(), e.begin(), ::tolower);
+            return e;
+        }();
+        std::string hint;
+        if      (ext == "rknn") hint = " (model extension '.rknn' suggests backend=RKNN / value 2 in config)";
+        else if (ext == "onnx") hint = " (model extension '.onnx' suggests backend=ONNX / value 0 in config)";
+        else if (ext == "xml" || ext == "bin") hint = " (model extension '." + ext + "' suggests backend=OpenVINO / value 1 in config)";
         throw std::runtime_error(
             std::string("DetectorFactory: backend '") + dsai_name(backend) +
-            "' was not compiled into this binary.");
+            "' was not compiled into this binary." + hint);
+    }
 
     dsai_validateThresholds(confThres, nmsThres);
     dsai_validateModelExtension(backend, modelPath);
