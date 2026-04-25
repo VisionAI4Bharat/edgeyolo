@@ -126,7 +126,7 @@ bool RV1106Capture::dsai_openCamera(int devId, int width, int height, double fps
         VI_DEV_ATTR_S da; memset(&da, 0, sizeof(da));
         CHECK_RET(RK_MPI_VI_SetDevAttr(0, &da), "VI SetDev");
         CHECK_RET(RK_MPI_VI_EnableDev(0), "VI EnableDev");
-        VI_CHN_ATTR_S ca; memset(&ca, 0, sizeof(ca)); ca.stIspOpt.u32BufCount = 3; ca.stIspOpt.enMemoryType = VI_V4L2_MEMORY_TYPE_DMABUF;
+        VI_CHN_ATTR_S ca; memset(&ca, 0, sizeof(ca)); ca.stIspOpt.u32BufCount = 2; ca.stIspOpt.enMemoryType = VI_V4L2_MEMORY_TYPE_DMABUF;
         ca.enPixelFormat = RK_FMT_YUV420SP; ca.stSize.u32Width = width; ca.stSize.u32Height = height;
         CHECK_RET(RK_MPI_VI_SetChnAttr(0, 0, &ca), "VI C0 Attr");
         CHECK_RET(RK_MPI_VI_EnableChn(0, 0), "VI C0 Enable");
@@ -136,7 +136,7 @@ bool RV1106Capture::dsai_openCamera(int devId, int width, int height, double fps
         VENC_CHN_ATTR_S va; memset(&va, 0, sizeof(va)); va.stVencAttr.enType = RK_VIDEO_ID_HEVC;
         va.stVencAttr.u32MaxPicWidth = width; va.stVencAttr.u32MaxPicHeight = height;
         va.stVencAttr.u32PicWidth = width; va.stVencAttr.u32PicHeight = height;
-        va.stVencAttr.u32BufSize = width*height*3/2; va.stRcAttr.enRcMode = VENC_RC_MODE_H265CBR;
+        va.stVencAttr.u32BufSize = width*height/4; va.stRcAttr.enRcMode = VENC_RC_MODE_H265CBR;
         va.stRcAttr.stH265Cbr.u32BitRate = 4096; va.stRcAttr.stH265Cbr.u32Gop = 60;
         CHECK_RET(RK_MPI_VENC_CreateChn(0, &va), "VENC Create");
         pImpl_->stViChn0.enModId=RK_ID_VI; pImpl_->stViChn0.s32ChnId=0; pImpl_->stVencChn0.enModId=RK_ID_VENC; pImpl_->stVencChn0.s32ChnId=0;
