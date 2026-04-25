@@ -19,7 +19,7 @@ struct RknnDetector::Impl {
     rknn_tensor_attr *inAt = nullptr, *outAt = nullptr;
     rknn_tensor_mem *inMe[1] = {}, *outMe[1] = {};
     int mW = 0, mH = 0, nC = 0;          // nC derived from model, never hardcoded
-    float cT = 0.25f, nT = 0.45f;
+    float cT = -1.0f, nT = -1.0f;  // sentinel — must be set by dsai_load
     bool l = false;
     std::vector<std::string> cN;
     std::string yamlPath;

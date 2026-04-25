@@ -44,6 +44,19 @@ static std::string dsai_fileExtension(const std::string& path) {
     return ext;
 }
 
+void DetectorFactory::dsai_validateThresholds(float confThres, float nmsThres) {
+    auto check = [](const char* name, float v) {
+        if (v <= 0.0f || v > 1.0f) {
+            char buf[128];
+            snprintf(buf, sizeof(buf),
+                "DetectorFactory: %s=%.4f is out of range — must be in (0, 1].", name, v);
+            throw std::runtime_error(buf);
+        }
+    };
+    check("confThres", confThres);
+    check("nmsThres",  nmsThres);
+}
+
 void DetectorFactory::dsai_validateModelExtension(Backend backend, const std::string& modelPath) {
     const std::string ext = dsai_fileExtension(modelPath);
     bool ok = false;
@@ -115,6 +128,7 @@ std::unique_ptr<IDetector> DetectorFactory::dsai_create(Backend            backe
             std::string("DetectorFactory: backend '") + dsai_name(backend) +
             "' was not compiled into this binary.");
 
+    dsai_validateThresholds(confThres, nmsThres);
     dsai_validateModelExtension(backend, modelPath);
 
     std::unique_ptr<IDetector> detector;

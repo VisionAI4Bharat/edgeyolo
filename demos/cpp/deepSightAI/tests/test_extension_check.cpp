@@ -1,7 +1,9 @@
 /*
  * Copyright (C) 2026 swatah.ai. All rights reserved.
  *
- * Unit tests for DetectorFactory::dsai_validateModelExtension.
+ * Unit tests for DetectorFactory validation helpers:
+ *   - dsai_validateModelExtension
+ *   - dsai_validateThresholds
  * No backend libraries (ONNX / OpenVINO / RKNN) are needed — the test
  * links only against DetectorFactory.cpp compiled without any backend defines.
  */
@@ -129,6 +131,57 @@ static void test_message_contains_path() {
         "Error message contains the offending file path");
 }
 
+static void test_thresholds_valid() {
+    // Boundary values that must not throw
+    EXPECT_NO_THROW(
+        DetectorFactory::dsai_validateThresholds(0.01f, 0.01f),
+        "thresholds: minimum valid (0.01, 0.01)");
+    EXPECT_NO_THROW(
+        DetectorFactory::dsai_validateThresholds(1.0f, 1.0f),
+        "thresholds: maximum valid (1.0, 1.0)");
+    EXPECT_NO_THROW(
+        DetectorFactory::dsai_validateThresholds(0.5f, 0.35f),
+        "thresholds: typical (0.5, 0.35)");
+}
+
+static void test_thresholds_invalid_conf() {
+    EXPECT_THROW_CONTAINING(
+        DetectorFactory::dsai_validateThresholds(0.0f, 0.45f),
+        "confThres",
+        "conf=0.0 rejected with name in message");
+    EXPECT_THROW_CONTAINING(
+        DetectorFactory::dsai_validateThresholds(-0.1f, 0.45f),
+        "confThres",
+        "conf=-0.1 rejected with name in message");
+    EXPECT_THROW_CONTAINING(
+        DetectorFactory::dsai_validateThresholds(1.1f, 0.45f),
+        "confThres",
+        "conf=1.1 rejected with name in message");
+    EXPECT_THROW_CONTAINING(
+        DetectorFactory::dsai_validateThresholds(0.0f, 0.45f),
+        "0.0000",
+        "conf=0.0 error message contains the bad value");
+}
+
+static void test_thresholds_invalid_nms() {
+    EXPECT_THROW_CONTAINING(
+        DetectorFactory::dsai_validateThresholds(0.5f, 0.0f),
+        "nmsThres",
+        "nms=0.0 rejected with name in message");
+    EXPECT_THROW_CONTAINING(
+        DetectorFactory::dsai_validateThresholds(0.5f, -0.5f),
+        "nmsThres",
+        "nms=-0.5 rejected with name in message");
+    EXPECT_THROW_CONTAINING(
+        DetectorFactory::dsai_validateThresholds(0.5f, 1.5f),
+        "nmsThres",
+        "nms=1.5 rejected with name in message");
+    EXPECT_THROW_CONTAINING(
+        DetectorFactory::dsai_validateThresholds(0.5f, 1.5f),
+        "1.5000",
+        "nms=1.5 error message contains the bad value");
+}
+
 // ─── entry point ─────────────────────────────────────────────────────────────
 int main() {
     printf("=== DetectorFactory extension validation tests ===\n\n");
@@ -139,6 +192,12 @@ int main() {
     test_rknn();
     printf("\n");
     test_message_contains_path();
+    printf("\n");
+    test_thresholds_valid();
+    printf("\n");
+    test_thresholds_invalid_conf();
+    printf("\n");
+    test_thresholds_invalid_nms();
     printf("\n=== Results: %d passed, %d failed ===\n", s_passed, s_failed);
     return s_failed == 0 ? 0 : 1;
 }

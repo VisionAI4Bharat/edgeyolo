@@ -20,8 +20,8 @@ public:
     virtual ~IDetector() = default;
 
     virtual void dsai_load(const std::string& modelPath,
-                      float confThres = 0.25f,
-                      float nmsThres  = 0.45f) = 0;
+                      float confThres,
+                      float nmsThres) = 0;
 
     virtual std::vector<Detection> dsai_infer(const cv::Mat& frame) = 0;
     virtual const std::vector<std::string>& dsai_classNames() const = 0;

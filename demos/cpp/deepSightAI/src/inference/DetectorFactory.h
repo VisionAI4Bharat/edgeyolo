@@ -38,11 +38,14 @@ enum class Backend {
  * Creates and initialises the requested IDetector backend.
  *
  * Usage:
- *   auto det = DetectorFactory::dsai_create(Backend::ONNX, "/path/to/model.onnx", 0.25f, 0.45f);
+ *   auto det = DetectorFactory::dsai_create(Backend::ONNX, "/path/to/model.onnx",
+ *                                           "/path/to/model.yaml", 0.50f, 0.35f);
  *   // det is ready — dsai_load() has already been called.
  *
  * Throws std::runtime_error if:
  *   - The requested backend was not compiled in.
+ *   - The model extension does not match the backend.
+ *   - confThres or nmsThres are out of range (0, 1].
  *   - dsai_load() fails for any reason.
  */
 class DetectorFactory {
@@ -61,9 +64,9 @@ public:
      */
     static std::unique_ptr<IDetector> dsai_create(Backend            backend,
                                              const std::string& modelPath,
-                                             const std::string& yamlPath  = {},
-                                             float              confThres = 0.25f,
-                                             float              nmsThres  = 0.45f);
+                                             const std::string& yamlPath,
+                                             float              confThres,
+                                             float              nmsThres);
 
     /** Returns true if the backend was compiled into this binary. */
     static bool dsai_isAvailable(Backend backend) noexcept;
@@ -77,6 +80,13 @@ public:
      * Called internally by dsai_create; also available for pre-flight checks.
      */
     static void dsai_validateModelExtension(Backend backend, const std::string& modelPath);
+
+    /**
+     * Validates that confThres and nmsThres are in the range (0, 1].
+     * Throws std::runtime_error with the bad value in the message.
+     * Called internally by dsai_create; also available for pre-flight checks.
+     */
+    static void dsai_validateThresholds(float confThres, float nmsThres);
 };
 
 } // namespace inference

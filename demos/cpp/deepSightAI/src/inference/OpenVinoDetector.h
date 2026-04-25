@@ -24,8 +24,8 @@ private:
     cv::Size inputSize_{0, 0};
     std::vector<std::string> classNames_;
     int numClasses_ = 0;
-    float confThres_ = 0.25f;
-    float nmsThres_ = 0.45f;
+    float confThres_ = -1.0f;  // sentinel — must be set by dsai_load
+    float nmsThres_  = -1.0f;
     bool loaded_ = false;
     std::string yamlPath_;
     std::vector<float> inputBlob_;
