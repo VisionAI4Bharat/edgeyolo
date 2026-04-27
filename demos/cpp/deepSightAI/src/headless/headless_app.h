@@ -45,6 +45,12 @@ public:
 
     void dsai_applyAndRestart(const AppConfig& newCfg);
 
+    // Inference error state — set when the pipeline exits due to an error,
+    // cleared when a new inference cycle starts.
+    bool        dsai_hasError()     const { return !errorMsg_.empty(); }
+    std::string dsai_errorMessage() const { return errorMsg_; }
+    void        dsai_clearError()         { errorMsg_.clear(); }
+
     // Dynamic filtering
     void dsai_setHiddenClasses(const std::vector<int>& ids);
 
@@ -60,6 +66,7 @@ private:
 
     std::atomic<bool> running_  { false };
     std::atomic<bool> restart_  { false };
+    std::string       errorMsg_;
 
     std::mutex frameMutex_;
     cv::Mat    latestFrame_;

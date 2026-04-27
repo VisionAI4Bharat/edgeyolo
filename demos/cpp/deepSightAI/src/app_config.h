@@ -34,8 +34,9 @@ struct AppConfig {
     std::string rtspUrl         = "/live/0";
     std::string iqDir           = "/etc/iqfiles";
 
-    int         resolutionIndex = 0;
-    int         fpsIndex        = 2;
+    int         captureWidth    = 640;
+    int         captureHeight   = 480;
+    int         captureFps      = 30;
     int         gain            = 50;
     int         gamma           = 100;
     int         brightness      = 0;
@@ -47,10 +48,6 @@ struct AppConfig {
     int         webPort         = 8080;
     int         rtspPort        = 8554;
     bool        debugLogging    = false;
-
-    int dsai_width()  const;
-    int dsai_height() const;
-    int dsai_fps()    const;
 
     static AppConfig dsai_loadFromFile(const std::string& path);
     void dsai_saveToFile(const std::string& path) const;

@@ -52,6 +52,18 @@ int HeadlessApp::run() {
     running_ = true;
     restart_ = false;
     dsai_runInferenceLoop();
+
+    // If the inference loop exited due to an error (running_ still true — was never
+    // stopped via dsai_stop() or dsai_requestRestart()), block here waiting for an
+    // explicit restart or stop.  This keeps the process — and the web server — alive
+    // so the operator can fix the config and restart via the dashboard.
+    if (running_ && !restart_ && !errorMsg_.empty()) {
+        fprintf(stderr,
+            "[HeadlessApp] Pipeline idle after error — web config available for reconfiguration.\n");
+        while (running_ && !restart_)
+            std::this_thread::sleep_for(std::chrono::milliseconds(250));
+    }
+
     return restart_.load() ? 1 : 0;
 }
 
@@ -66,6 +78,7 @@ cv::Mat HeadlessApp::dsai_latestFrame() {
 }
 
 void HeadlessApp::dsai_runInferenceLoop() {
+    errorMsg_.clear();
     Debug::dsai_setEnabled(cfg_.debugLogging);
     cfg_.dsai_logConfig();
 
@@ -74,7 +87,8 @@ void HeadlessApp::dsai_runInferenceLoop() {
     cap.dsai_setAppConfig(cfg_);
 
     if (cfg_.modelFile.empty()) {
-        fprintf(stderr, "[HeadlessApp] No model file configured.\n");
+        errorMsg_ = "No model file configured.";
+        fprintf(stderr, "[HeadlessApp] %s\n", errorMsg_.c_str());
         return;
     }
 
@@ -83,11 +97,12 @@ void HeadlessApp::dsai_runInferenceLoop() {
         inference::Backend detBackend = static_cast<inference::Backend>(cfg_.backend);
         detector = inference::DetectorFactory::dsai_create(detBackend, cfg_.modelFile, cfg_.yamlFile, cfg_.confThreshold, cfg_.nmsThreshold);
         if (!cfg_.classLabels.empty()) detector->dsai_setClassLabels(cfg_.classLabels);
-        
+
         cv::Size inputSize = detector->dsai_inputSize();
         cap.dsai_setModelInputSize(inputSize.width, inputSize.height);
     } catch (const std::exception& e) {
-        fprintf(stderr, "[HeadlessApp] Detector init failed: %s\n", e.what());
+        errorMsg_ = std::string("Detector init failed: ") + e.what();
+        fprintf(stderr, "[HeadlessApp] %s\n", errorMsg_.c_str());
         return;
     }
 
@@ -100,12 +115,13 @@ void HeadlessApp::dsai_runInferenceLoop() {
         opened = cap.dsai_openSource(cfg_.rtspUrl);
     } else {
         printf("[HeadlessApp] Opening camera: device %d, %dx%d @ %dfps\n",
-               cfg_.cameraDeviceId, cfg_.dsai_width(), cfg_.dsai_height(), cfg_.dsai_fps());
-        opened = cap.dsai_openCamera(cfg_.cameraDeviceId, cfg_.dsai_width(), cfg_.dsai_height(), static_cast<double>(cfg_.dsai_fps()));
+               cfg_.cameraDeviceId, cfg_.captureWidth, cfg_.captureHeight, cfg_.captureFps);
+        opened = cap.dsai_openCamera(cfg_.cameraDeviceId, cfg_.captureWidth, cfg_.captureHeight, static_cast<double>(cfg_.captureFps));
     }
 
     if (!opened) {
-        fprintf(stderr, "[HeadlessApp] Capture open failed: %s\n", cap.dsai_lastError().c_str());
+        errorMsg_ = std::string("Capture open failed: ") + cap.dsai_lastError();
+        fprintf(stderr, "[HeadlessApp] %s\n", errorMsg_.c_str());
         return;
     }
 

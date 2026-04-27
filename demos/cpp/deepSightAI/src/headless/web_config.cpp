@@ -106,9 +106,9 @@ input[type=checkbox]{flex:none;width:18px;height:18px;accent-color:#2563eb}
 <div class="row"><label>Gain</label><input id="gain" type="number" min="0" max="255"></div>
 <div class="row"><label>Gamma</label><input id="gamma" type="number" min="72" max="500"></div>
 <div class="row"><label>Brightness</label><input id="brightness" type="number" min="-64" max="64"></div>
-<div class="row"><label>Resolution</label>
-<select id="resolution_index"><option value="0">640x480</option><option value="1">1280x720</option><option value="2">1920x1080</option><option value="3">320x240</option><option value="4">416x416</option></select></div>
-<div class="row"><label>FPS</label><select id="fps_index"><option value="0">15</option><option value="1">25</option><option value="2">30</option><option value="3">60</option><option value="4">90</option></select></div>
+<div class="row"><label>Width (px)</label><input id="capture_width" type="number" min="64" max="4096" step="8"></div>
+<div class="row"><label>Height (px)</label><input id="capture_height" type="number" min="64" max="4096" step="8"></div>
+<div class="row"><label>FPS</label><input id="capture_fps" type="number" min="1" max="240"></div>
 <div class="row"><label>IQ files dir</label><input id="iq_dir" type="text"></div>
 <button class="btn" onclick="dsai_applySource()">Apply</button>
 <div class="st" id="st-s"></div></div>
@@ -158,8 +158,9 @@ async function loadCfg(){
     $('gain').value=c.gain;
     $('gamma').value=c.gamma;
     $('brightness').value=c.brightness;
-    $('resolution_index').value=c.resolution_index;
-    $('fps_index').value=c.fps_index;
+    $('capture_width').value=c.capture_width;
+    $('capture_height').value=c.capture_height;
+    $('capture_fps').value=c.capture_fps;
     $('iq_dir').value=c.iq_dir||'';
     $('conf_threshold').value=c.conf_threshold;
     $('nms_threshold').value=c.nms_threshold;
@@ -233,8 +234,9 @@ function dsai_applySource(){
     gain:+v('gain'),
     gamma:+v('gamma'),
     brightness:+v('brightness'),
-    resolution_index:+v('resolution_index'),
-    fps_index:+v('fps_index'),
+    capture_width:+v('capture_width'),
+    capture_height:+v('capture_height'),
+    capture_fps:+v('capture_fps'),
     iq_dir:v('iq_dir')
   },'st-s');
 }
@@ -586,8 +588,9 @@ std::string WebConfigServer::dsai_jsonConfigResp() {
         "\"gain\":%d,"
         "\"gamma\":%d,"
         "\"brightness\":%d,"
-        "\"resolution_index\":%d,"
-        "\"fps_index\":%d,"
+        "\"capture_width\":%d,"
+        "\"capture_height\":%d,"
+        "\"capture_fps\":%d,"
         "\"conf_threshold\":%.3f,"
         "\"nms_threshold\":%.3f,"
         "\"roi_enabled\":%s,"
@@ -602,7 +605,7 @@ std::string WebConfigServer::dsai_jsonConfigResp() {
         static_cast<int>(c.source), c.cameraDeviceId,
         c.rtspUrl.c_str(), c.videoFile.c_str(), c.iqDir.c_str(),
         c.gain, c.gamma, c.brightness,
-        c.resolutionIndex, c.fpsIndex,
+        c.captureWidth, c.captureHeight, c.captureFps,
         c.confThreshold, c.nmsThreshold,
         c.roiEnabled ? "true" : "false",
         c.rockchipHw ? "true" : "false",
@@ -674,8 +677,9 @@ std::string WebConfigServer::dsai_applySource(const std::string& body) {
     if (dsai_jInt(body, "gain",             ival)) c.gain            = ival;
     if (dsai_jInt(body, "gamma",            ival)) c.gamma           = ival;
     if (dsai_jInt(body, "brightness",       ival)) c.brightness      = ival;
-    if (dsai_jInt(body, "resolution_index", ival)) c.resolutionIndex = ival;
-    if (dsai_jInt(body, "fps_index",        ival)) c.fpsIndex        = ival;
+    if (dsai_jInt(body, "capture_width",  ival)) c.captureWidth  = ival;
+    if (dsai_jInt(body, "capture_height", ival)) c.captureHeight = ival;
+    if (dsai_jInt(body, "capture_fps",    ival)) c.captureFps    = ival;
     dsai_saveConfig(app_);
     return dsai_ok200("{\"ok\":true}");
 }

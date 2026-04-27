@@ -72,8 +72,8 @@ void VideoWidget::dsai_startCaptureThread() {
             DBG_LOG(TAG, "Opening source: %s\n", path.toStdString().c_str());
             opened = cap->dsai_openSource(path.toStdString());
         } else {
-            DBG_LOG(TAG, "Opening camera: %d (%dx%d)\n", devId, cfg.dsai_width(), cfg.dsai_height());
-            opened = cap->dsai_openCamera(devId, cfg.dsai_width(), cfg.dsai_height(), (double)cfg.dsai_fps());
+            DBG_LOG(TAG, "Opening camera: %d (%dx%d)\n", devId, cfg.captureWidth, cfg.captureHeight);
+            opened = cap->dsai_openCamera(devId, cfg.captureWidth, cfg.captureHeight, (double)cfg.captureFps);
         }
         if (!opened) { fprintf(stderr, "[VideoWidget] Failed to open source: %s\n", cap->dsai_lastError().c_str()); return; }
 

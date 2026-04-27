@@ -168,23 +168,6 @@ static std::string patchYamlText(const std::string& orig, const YAML::Node& desi
     return out.str();
 }
 
-// ── resolution / fps lookup tables (match ConfigDialog combos exactly) ────────
-static const int kWidths[]  = { 640, 1280, 1920, 320,  416 };
-static const int kHeights[] = { 480,  720, 1080, 240,  416 };
-static const int kFps[]     = {  15,   25,   30,  60,   90 };
-
-int AppConfig::dsai_width()  const {
-    int idx = (resolutionIndex >= 0 && resolutionIndex < 5) ? resolutionIndex : 0;
-    return kWidths[idx];
-}
-int AppConfig::dsai_height() const {
-    int idx = (resolutionIndex >= 0 && resolutionIndex < 5) ? resolutionIndex : 0;
-    return kHeights[idx];
-}
-int AppConfig::dsai_fps() const {
-    int idx = (fpsIndex >= 0 && fpsIndex < 5) ? fpsIndex : 2;
-    return kFps[idx];
-}
 
 std::string AppConfig::dsai_defaultPath() {
 #ifdef __arm__
@@ -226,8 +209,9 @@ AppConfig AppConfig::dsai_loadFromFile(const std::string& path) {
     get("video_file",       cfg.videoFile);
     get("rtsp_url",         cfg.rtspUrl);
     get("iq_dir",           cfg.iqDir);
-    get("resolution_index", cfg.resolutionIndex);
-    get("fps_index",        cfg.fpsIndex);
+    get("capture_width",    cfg.captureWidth);
+    get("capture_height",   cfg.captureHeight);
+    get("capture_fps",      cfg.captureFps);
     get("gain",             cfg.gain);
     get("gamma",            cfg.gamma);
     get("brightness",       cfg.brightness);
@@ -235,7 +219,6 @@ AppConfig AppConfig::dsai_loadFromFile(const std::string& path) {
     get("roi_enabled",      cfg.roiEnabled);
     get("web_port",         cfg.webPort);
     get("debug_logging",    cfg.debugLogging);
-    get("rtsp_port",         cfg.rtspPort);
     get("rtsp_port",         cfg.rtspPort);
 
     if (n["roi"]) {
@@ -277,8 +260,9 @@ void AppConfig::dsai_saveToFile(const std::string& path) const {
     n["video_file"]       = videoFile;
     n["rtsp_url"]         = rtspUrl;
     n["iq_dir"]           = iqDir;
-    n["resolution_index"] = resolutionIndex;
-    n["fps_index"]        = fpsIndex;
+    n["capture_width"]    = captureWidth;
+    n["capture_height"]   = captureHeight;
+    n["capture_fps"]      = captureFps;
     n["gain"]             = gain;
     n["gamma"]            = gamma;
     n["brightness"]       = brightness;
@@ -352,7 +336,7 @@ std::string AppConfig::dsai_logConfigToString() const {
     o << "  Source     : " << sourceStr;
     if (source == SourceType::Camera) {
         snprintf(buf, sizeof(buf), "  device=%d  %dx%d @ %dfps",
-                 cameraDeviceId, dsai_width(), dsai_height(), dsai_fps());
+                 cameraDeviceId, captureWidth, captureHeight, captureFps);
         o << buf;
     } else if (source == SourceType::VideoFile) {
         o << "  " << videoFile;

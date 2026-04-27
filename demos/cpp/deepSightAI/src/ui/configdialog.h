@@ -114,6 +114,7 @@ private:
     static QHBoxLayout* dsai_makeSliderRow(QSlider*& slider, QSpinBox*& spin,
                                       int minVal, int maxVal, int defaultVal);
     void dsai_populateCameras();
+    void dsai_populateResolutionCombo(int devId);
     void dsai_updateSourceVisibility();
     void dsai_updateInfoPanel();
     bool dsai_validateInputs(QString& errorMsg) const;

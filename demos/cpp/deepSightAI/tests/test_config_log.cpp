@@ -100,8 +100,9 @@ static void test_source_camera() {
     AppConfig cfg;
     cfg.source          = SourceType::Camera;
     cfg.cameraDeviceId  = 0;
-    cfg.resolutionIndex = 0; // 640x480
-    cfg.fpsIndex        = 2; // 30fps
+    cfg.captureWidth    = 640;
+    cfg.captureHeight   = 480;
+    cfg.captureFps      = 30;
 
     std::string s = cfg.dsai_logConfigToString();
     SHOW_OUTPUT(s);

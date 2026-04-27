@@ -20,6 +20,7 @@
 
 #include "configdialog.h"
 #include "../app_config.h"
+#include "../capture/ICapture.h"
 
 #include <QDir>
 #include <QFile>
@@ -280,6 +281,12 @@ void ConfigDialog::dsai_setupCameraSection(QVBoxLayout* parent)
     refreshCamerasButton_ = new QPushButton("Refresh", this);
 
     connect(refreshCamerasButton_, &QPushButton::clicked, this, &ConfigDialog::dsai_refreshCameras);
+    connect(cameraComboBox_, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, [this](int idx) {
+                int devId = (idx >= 0 && idx < availableCameraIds_.size())
+                            ? availableCameraIds_[idx] : 0;
+                dsai_populateResolutionCombo(devId);
+            });
 
     QHBoxLayout* lay = new QHBoxLayout();
     lay->addWidget(cameraComboBox_, 1);
@@ -335,12 +342,7 @@ void ConfigDialog::dsai_setupResolutionSection(QVBoxLayout* parent)
     QHBoxLayout* lay = new QHBoxLayout(resolutionGroup_);
 
     resolutionComboBox_ = new QComboBox(this);
-    resolutionComboBox_->addItem("640 × 480",   QSize(640,  480));
-    resolutionComboBox_->addItem("800 × 600",   QSize(800,  600));
-    resolutionComboBox_->addItem("1280 × 720",  QSize(1280, 720));
-    resolutionComboBox_->addItem("1920 × 1080", QSize(1920, 1080));
-    resolutionComboBox_->addItem("Custom",       QSize(0,    0));
-    resolutionComboBox_->setCurrentIndex(0);
+    dsai_populateResolutionCombo(0);  // populate from V4L2 device 0 on construction
 
     connect(resolutionComboBox_, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &ConfigDialog::dsai_onResolutionChanged);
@@ -536,6 +538,29 @@ void ConfigDialog::dsai_populateCameras()
         cameraComboBox_->addItem(name);
         availableCameraIds_.append(id);
     }
+}
+
+void ConfigDialog::dsai_populateResolutionCombo(int devId) {
+    resolutionComboBox_->blockSignals(true);
+    resolutionComboBox_->clear();
+
+    const auto modes = deepSightAI::ICapture::dsai_enumerateModes(devId);
+    for (const auto& m : modes) {
+        QString label = QString("%1 × %2 @ %3 fps")
+                        .arg(m.width).arg(m.height).arg(m.fps);
+        resolutionComboBox_->addItem(label,
+            QVariant::fromValue(QSize(m.width, m.height)));
+    }
+
+    if (modes.empty()) {
+        // V4L2 enumeration unavailable — offer common sizes as fallback
+        for (auto [w, h] : std::initializer_list<std::pair<int,int>>{
+                {640,480},{1280,720},{1920,1080}})
+            resolutionComboBox_->addItem(
+                QString("%1 × %2").arg(w).arg(h),
+                QVariant::fromValue(QSize(w, h)));
+    }
+    resolutionComboBox_->blockSignals(false);
 }
 
 void ConfigDialog::dsai_updateSourceVisibility()
@@ -943,8 +968,9 @@ void ConfigDialog::dsai_saveConfig()
     cfg.cameraDeviceId   = cameraDeviceId_;
     cfg.videoFile        = videoFilePathEdit_->text().toStdString();
     cfg.rtspUrl          = rtspUrlEdit_->text().toStdString();
-    cfg.resolutionIndex  = resolutionComboBox_->currentIndex();
-    cfg.fpsIndex         = fpsComboBox_->currentIndex();
+    cfg.captureWidth  = dsai_getWidth();
+    cfg.captureHeight = dsai_getHeight();
+    cfg.captureFps    = dsai_getFps();
     cfg.gain             = gainSpinBox_->value();
     cfg.gamma            = gammaSpinBox_->value();
     cfg.brightness       = brightnessSpinBox_->value();
@@ -1024,9 +1050,21 @@ void ConfigDialog::dsai_loadConfig()
     videoFilePathEdit_->setText(QString::fromStdString(cfg.videoFile));
     rtspUrlEdit_->setText(QString::fromStdString(cfg.rtspUrl));
 
-    // Resolution / FPS
-    resolutionComboBox_->setCurrentIndex(cfg.resolutionIndex);
-    fpsComboBox_->setCurrentIndex(cfg.fpsIndex);
+    // Resolution — find the entry matching captureWidth × captureHeight
+    for (int i = 0; i < resolutionComboBox_->count(); ++i) {
+        QSize s = resolutionComboBox_->itemData(i).toSize();
+        if (s.width() == cfg.captureWidth && s.height() == cfg.captureHeight) {
+            resolutionComboBox_->setCurrentIndex(i);
+            break;
+        }
+    }
+    // FPS — find closest match
+    for (int i = 0; i < fpsComboBox_->count(); ++i) {
+        if (fpsComboBox_->itemData(i).toInt() == cfg.captureFps) {
+            fpsComboBox_->setCurrentIndex(i);
+            break;
+        }
+    }
 
     // V4L2 controls
     gainSpinBox_->setValue(cfg.gain);
