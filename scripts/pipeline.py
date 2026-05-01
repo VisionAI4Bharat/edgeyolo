@@ -66,6 +66,9 @@ from dataclasses import dataclass, asdict
 from pathlib import Path, PurePosixPath
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from prepare_combined_voc import is_combined_voc, split_combined_voc
+
 try:
     import cv2  # type: ignore
 except Exception as exc:  # pragma: no cover
@@ -536,24 +539,27 @@ def prepare_from_yolo(
     train_lbl_dir = Path(layout.extra["train_labels"])
     valid_lbl_dir = Path(layout.extra["valid_labels"])
 
-    if not class_names:
-        class_names = discover_class_names_from_yaml_files(source_root)
-
-    # If names are still missing, infer a generic class list from maximum class id.
-    if not class_names:
-        max_cls = -1
-        for lbl_dir in [train_lbl_dir, valid_lbl_dir]:
-            for p in lbl_dir.iterdir():
-                if p.is_file() and p.suffix.lower() == ".txt":
-                    for row in load_yolo_label_lines(p):
-                        max_cls = max(max_cls, row[0])
-        if max_cls < 0:
-            abort("Could not infer class names from YOLO dataset because all labels were empty")
-        class_names = [f"class_{i}" for i in range(max_cls + 1)]
-        log(
-            "[warn] No class names were found in data.yaml/dataset.yaml. "
-            f"Using generic names: {class_names}"
-        )
+    if class_names:
+        _cls_src = "user override"
+    else:
+        yaml_names = discover_class_names_from_yaml_files(source_root)
+        if yaml_names:
+            class_names = yaml_names
+            _cls_src = "YAML file"
+        else:
+            max_cls = -1
+            for lbl_dir in [train_lbl_dir, valid_lbl_dir]:
+                for p in lbl_dir.iterdir():
+                    if p.is_file() and p.suffix.lower() == ".txt":
+                        for row in load_yolo_label_lines(p):
+                            max_cls = max(max_cls, row[0])
+            if max_cls < 0:
+                abort("Could not infer class names from YOLO dataset because all labels were empty")
+            class_names = [f"class_{i}" for i in range(max_cls + 1)]
+            _cls_src = "inferred from max class ID (no YAML found)"
+            log("[warn] No class names found in data.yaml/dataset.yaml. Using generic names.")
+    _cls_display = class_names[:10] + ["..."] if len(class_names) > 10 else class_names
+    log(f"[classes] Source: {_cls_src} — {len(class_names)} class(es): {_cls_display}")
 
     for split in ["train", "valid"]:
         ensure_dir(prepared_root / split / "images")
@@ -853,6 +859,11 @@ def prepare_from_voc(
         class_names = class_names_override
 
     class_to_id = {name: idx for idx, name in enumerate(class_names)}
+    _cls_src = "user override" if class_names_override else "VOC XML scan"
+    _cls_display = class_names[:10] + ["..."] if len(class_names) > 10 else class_names
+    log(f"[classes] Source: {_cls_src} — {len(class_names)} class(es): {_cls_display}")
+    if class_names_override:
+        log(f"[classes] XML <name> values not in the override list will be remapped to '{class_names[0]}'")
 
     def process_split(split_name: str, img_dir: Path, lbl_dir: Path) -> Tuple[List[Dict], List[Dict]]:
         images: List[Dict] = []
@@ -868,10 +879,11 @@ def prepare_from_voc(
                 by_stem[p.stem] = p
                 by_name[p.name] = p
 
-        for xml_path in sorted(lbl_dir.iterdir()):
-            if not xml_path.is_file() or xml_path.suffix.lower() != ".xml":
-                continue
+        xml_files = [p for p in sorted(lbl_dir.iterdir()) if p.is_file() and p.suffix.lower() == ".xml"]
+        for idx, xml_path in enumerate(xml_files, 1):
             filename, _, _, boxes = parse_voc_xml(xml_path)
+            if idx % 100 == 0 or idx == len(xml_files):
+                log(f"[prepare:voc:{split_name}] {idx}/{len(xml_files)} images")
             if not boxes:
                 continue
             src_img = by_name.get(filename) or by_stem.get(Path(filename).stem) or by_stem.get(xml_path.stem)
@@ -890,7 +902,9 @@ def prepare_from_voc(
 
             for name, xmin, ymin, xmax, ymax in boxes:
                 if name not in class_to_id:
-                    abort(f"VOC class '{name}' not present in class name mapping")
+                    if not class_names_override:
+                        abort(f"VOC class '{name}' not present in class name mapping")
+                    name = class_names[0]
                 x = xmin
                 y = ymin
                 w = xmax - xmin
@@ -1028,6 +1042,31 @@ def patch_edgeyolo_for_torch26(edgeyolo_root: Path) -> None:
 
 
 
+def _download_file(url: str, dest: Path, chunk: int = 1 << 16) -> None:
+    """Streaming download with HTTP Range resume support."""
+    pre_size = dest.stat().st_size if dest.exists() else 0
+    headers: dict = {"User-Agent": "python-wget/1.0"}
+    if pre_size:
+        headers["Range"] = f"bytes={pre_size}-"
+    req = urllib.request.Request(url, headers=headers)
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        resuming = (resp.status == 206)
+        if not resuming:
+            pre_size = 0
+        content_length = int(resp.headers.get("Content-Length") or 0)
+        with open(dest, "ab" if resuming else "wb") as fh:
+            while True:
+                data = resp.read(chunk)
+                if not data:
+                    break
+                fh.write(data)
+    if content_length:
+        got = dest.stat().st_size
+        expected = pre_size + content_length
+        if got < expected:
+            raise RuntimeError(f"retrieval incomplete: got only {got} out of {expected} bytes")
+
+
 def ensure_pretrained_weights(edgeyolo_root: Path, model_key: str, input_size: int) -> Path:
     """
     Ensure pretrained weights exist locally.
@@ -1076,27 +1115,23 @@ def ensure_pretrained_weights(edgeyolo_root: Path, model_key: str, input_size: i
 
         # Download only the requested alias.
         tmp_path = chosen_path.with_suffix(chosen_path.suffix + ".part")
-        if tmp_path.exists():
-            tmp_path.unlink()
 
         last_err = None
         for attempt in range(1, 4):
             try:
+                offset = tmp_path.stat().st_size if tmp_path.exists() else 0
                 log(
                     f"[weights] Downloading pretrained weights alias {chosen['name']} "
                     f"from {chosen_url} (attempt {attempt}/3)"
+                    + (f", resuming from {offset:,} bytes" if offset else "")
                 )
-                urllib.request.urlretrieve(chosen_url, tmp_path)
-                if not tmp_path.exists() or tmp_path.stat().st_size == 0:
-                    raise RuntimeError("Downloaded file is missing or empty")
+                _download_file(chosen_url, tmp_path)
                 tmp_path.replace(chosen_path)
                 log(f"[weights] Download complete: {chosen_path}")
                 return chosen_path
             except Exception as exc:
                 last_err = exc
                 log(f"[weights] Download failed for {chosen['name']}: {exc}")
-                if tmp_path.exists():
-                    tmp_path.unlink()
                 time.sleep(2 * attempt)
 
         abort(f"Failed to obtain pretrained weights after retries: {chosen['name']} ({last_err})")
@@ -1108,24 +1143,22 @@ def ensure_pretrained_weights(edgeyolo_root: Path, model_key: str, input_size: i
         return weights_path
 
     tmp_path = weights_path.with_suffix(weights_path.suffix + ".part")
-    if tmp_path.exists():
-        tmp_path.unlink()
 
     last_err = None
     for attempt in range(1, 4):
         try:
-            log(f"[weights] Downloading pretrained weights: {preset['weights_url']} (attempt {attempt}/3)")
-            urllib.request.urlretrieve(preset["weights_url"], tmp_path)
-            if not tmp_path.exists() or tmp_path.stat().st_size == 0:
-                raise RuntimeError("Downloaded file is missing or empty")
+            offset = tmp_path.stat().st_size if tmp_path.exists() else 0
+            log(
+                f"[weights] Downloading pretrained weights: {preset['weights_url']} (attempt {attempt}/3)"
+                + (f", resuming from {offset:,} bytes" if offset else "")
+            )
+            _download_file(preset["weights_url"], tmp_path)
             tmp_path.replace(weights_path)
             log(f"[weights] Download complete: {weights_path}")
             return weights_path
         except Exception as exc:
             last_err = exc
             log(f"[weights] Download failed: {exc}")
-            if tmp_path.exists():
-                tmp_path.unlink()
             time.sleep(2 * attempt)
 
     abort(f"Failed to obtain pretrained weights after retries: {weights_path.name} ({last_err})")
@@ -1409,10 +1442,16 @@ def maybe_export_onnx_after_train(
 # Argument parsing and main orchestration
 # -----------------------------------------------------------------------------
 
+class _HelpOnErrorParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        self.print_help(sys.stderr)
+        self.exit(2, f"\nerror: {message}\n")
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    parser = _HelpOnErrorParser(
         description="Reusable EdgeYOLO wrapper: dataset checks, cleanup, conversion, YAML generation, training, ONNX export.",
-        formatter_class=argparse.RawTextHelpFormatter,
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
     parser.add_argument(
@@ -1425,7 +1464,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
         nargs="*",
         default=None,
         help=(
-            "Optional class names override.\n"
+            "Optional class names override. If omitted, auto-detected per format:\n"
+            "  VOC  : scanned from <name> elements across all XML annotations\n"
+            "         (also applies to combined/unsplit VOC — split is done first,\n"
+            "          then class names are collected from the split output)\n"
+            "  YOLO : read from data.yaml / dataset.yaml 'names' key;\n"
+            "         falls back to generic class_0..class_N from max label ID\n"
+            "  COCO : always read from the JSON categories array (override ignored)\n"
             "Examples:\n"
             "  --class-names forklift person\n"
             "  --class-names forklift,person"
@@ -1502,11 +1547,34 @@ def main() -> None:
     if not device_list:
         abort("--device produced an empty device list")
 
+    log("[config] ─────────── run parameters ───────────────────────")
+    log(f"[config]  dataset-root  : {args.dataset_root}")
+    log(f"[config]  model         : {args.model}")
+    log(f"[config]  epochs        : {args.epochs}")
+    log(f"[config]  batch-size    : {args.batch_size}")
+    log(f"[config]  input-size    : {args.input_size}")
+    log(f"[config]  num-workers   : {args.num_workers}")
+    log(f"[config]  device        : {args.device}")
+    log(f"[config]  fp16          : {args.fp16}")
+    log(f"[config]  eval-interval : {args.eval_interval}")
+    log(f"[config]  class-names   : {', '.join(raw_class_names) if raw_class_names else '(auto-detect from dataset)'}")
+    log(f"[config]  prepare-only  : {args.prepare_only}")
+    log(f"[config]  export-onnx   : {args.export_onnx_after_train}")
+    log("[config] ──────────────────────────────────────────────────")
+
     dataset_root = Path(args.dataset_root).expanduser().resolve()
     working_root = repo_root / "workspace"
     ensure_dir(working_root)
 
     extracted_root = extract_input_if_needed(dataset_root, working_root)
+
+    if is_combined_voc(extracted_root):
+        split_root = working_root / "split" / extracted_root.name
+        log(f"[detect] Combined (unsplit) VOC dataset detected — splitting into train/valid under: {split_root}")
+        n_train, n_valid = split_combined_voc(extracted_root, split_root)
+        log(f"[detect] Split complete: {n_train} train pairs, {n_valid} valid pairs")
+        extracted_root = split_root
+
     layout = detect_dataset_layout(extracted_root)
     log(f"[detect] Source format detected: {layout.format_name}")
     log(f"[detect] Source dataset root: {layout.source_root}")
@@ -1518,7 +1586,7 @@ def main() -> None:
     log(
         f"[summary] train images={summary.train_images}, train annotations={summary.train_annotations}, "
         f"valid images={summary.valid_images}, valid annotations={summary.valid_annotations}, "
-        f"classes={summary.class_names}"
+        f"classes={summary.class_names[:10] + ['...'] if len(summary.class_names) > 10 else summary.class_names}"
     )
 
     run_files = generate_edgeyolo_configs(
